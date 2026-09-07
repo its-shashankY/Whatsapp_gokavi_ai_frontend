@@ -1,15 +1,39 @@
-import { cn } from "@/lib/utils";
-import { Icon } from "@/components/ui/Icon";
-import type { TriageCase } from "@/types";
+"use client";
 
-const PRIORITY_BADGE: Record<TriageCase["priority"], string> = {
-  critical: "bg-error text-on-error",
-  urgent: "bg-secondary text-on-secondary",
-  standard: "bg-surface-container-high text-on-surface-variant",
+import { useState } from "react";
+import Link from "next/link";
+import { cn, formatElapsedSince } from "@/lib/utils";
+import { Icon } from "@/components/ui/Icon";
+import { PriorityTag } from "@/components/ui/PriorityTag";
+import type { Escalation, EscalationTrigger } from "@/types";
+
+const TRIGGER_LABEL: Record<EscalationTrigger, string> = {
+  RED_FLAG_SYMPTOM: "Red-Flag Symptom",
+  MISSED_CRITICAL_DOSE: "Missed Critical Dose",
+  HUMAN_REQUEST: "Requested Human Help",
+  SENTIMENT_DISTRESS: "Distress Signal",
+  CYCLE_CANCELLATION: "Cycle Cancellation",
+  NO_SHOW_PATTERN: "No-Show Pattern",
 };
 
-export function TriageCard({ triageCase }: { triageCase: TriageCase }) {
-  const critical = triageCase.priority === "critical";
+interface TriageCardProps {
+  escalation: Escalation;
+  onAck: (id: string) => Promise<void>;
+  onResolve: (id: string) => Promise<void>;
+}
+
+export function TriageCard({ escalation, onAck, onResolve }: TriageCardProps) {
+  const [busy, setBusy] = useState(false);
+  const critical = escalation.severity === "CRITICAL";
+
+  const runAction = async (action: (id: string) => Promise<void>) => {
+    setBusy(true);
+    try {
+      await action(escalation.id);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <article
@@ -20,14 +44,12 @@ export function TriageCard({ triageCase }: { triageCase: TriageCase }) {
     >
       <div className="absolute top-0 right-0 w-24 h-24 bg-error-container/40 rounded-bl-full -mr-4 -mt-4 z-0" />
       <div className="flex justify-between items-start mb-4 relative z-10 gap-2">
-        <span
-          className={cn(
-            "px-2 py-1 rounded text-xs font-bold uppercase tracking-wider",
-            PRIORITY_BADGE[triageCase.priority],
-          )}
-        >
-          {triageCase.levelLabel}
-        </span>
+        <div className="flex flex-col gap-1">
+          <PriorityTag severity={escalation.severity} />
+          <span className="text-[11px] text-on-surface-variant uppercase tracking-wider font-bold">
+            {TRIGGER_LABEL[escalation.triggerType]}
+          </span>
+        </div>
         <div className="text-right flex-shrink-0">
           <div
             className={cn(
@@ -36,20 +58,27 @@ export function TriageCard({ triageCase }: { triageCase: TriageCase }) {
             )}
           >
             <Icon name="timer" className="!text-lg" />
-            {triageCase.waitTime}
+            {formatElapsedSince(escalation.createdAt)}
           </div>
           <div className="text-xs text-on-surface-variant uppercase tracking-wider font-bold">Wait Time</div>
         </div>
       </div>
 
       <div className="mb-6 relative z-10 min-w-0">
-        <h3 className="font-headline-md text-headline-md text-primary mb-1 break-words">
-          {triageCase.patientName}
-        </h3>
+        <Link
+          href={`/patients/${escalation.patientId}`}
+          className="font-headline-md text-headline-md text-primary mb-1 break-words hover:underline block"
+        >
+          {escalation.patientName ?? "Unknown Contact"}
+        </Link>
         <p className="text-on-surface-variant text-sm flex items-center gap-2 mb-3 flex-wrap">
-          <Icon name="badge" className="!text-sm" /> ID: {triageCase.patientId}
-          <span className="w-1 h-1 rounded-full bg-outline" />
-          {triageCase.age} Yrs, {triageCase.sex}
+          <Icon name="call" className="!text-sm" /> {escalation.patientPhone}
+          {escalation.afterHours && (
+            <>
+              <span className="w-1 h-1 rounded-full bg-outline" />
+              <span className="text-secondary font-medium">After Hours</span>
+            </>
+          )}
         </p>
         <div
           className={cn(
@@ -57,30 +86,35 @@ export function TriageCard({ triageCase }: { triageCase: TriageCase }) {
             critical ? "border-error" : "border-secondary",
           )}
         >
-          <p className="text-on-surface font-medium text-sm break-words">{triageCase.complaint}</p>
+          <p className="text-on-surface font-medium text-sm break-words">
+            {escalation.sourceMessage ?? "No message details captured."}
+          </p>
         </div>
       </div>
 
-      <div className="mt-auto grid grid-cols-2 gap-3 relative z-10">
-        {triageCase.vitals.map((vital) => (
-          <div key={vital.label} className="bg-surface p-2 rounded text-center border border-outline-variant/30">
-            <div className="text-xs text-on-surface-variant mb-1">{vital.label}</div>
-            <div className={cn("font-bold", critical ? "text-error" : "text-on-surface")}>{vital.value}</div>
-          </div>
-        ))}
-      </div>
-
-      <button
-        className={cn(
-          "w-full mt-4 font-button py-3 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-sm relative z-10",
-          critical
-            ? "bg-error text-on-error hover:bg-error/90"
-            : "bg-secondary text-on-secondary hover:opacity-90",
+      <div className="mt-auto flex gap-3 relative z-10">
+        {escalation.status === "OPEN" && (
+          <button
+            onClick={() => runAction(onAck)}
+            disabled={busy}
+            className="flex-1 font-button py-3 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-sm border border-outline-variant text-on-surface hover:bg-surface-container-low disabled:opacity-50"
+          >
+            <Icon name="check_circle" />
+            Acknowledge
+          </button>
         )}
-      >
-        <Icon name="campaign" filled />
-        Escalate to Attending
-      </button>
+        <button
+          onClick={() => runAction(onResolve)}
+          disabled={busy}
+          className={cn(
+            "flex-1 font-button py-3 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-sm disabled:opacity-50",
+            critical ? "bg-error text-on-error hover:bg-error/90" : "bg-secondary text-on-secondary hover:opacity-90",
+          )}
+        >
+          <Icon name="task_alt" filled />
+          Resolve
+        </button>
+      </div>
     </article>
   );
 }

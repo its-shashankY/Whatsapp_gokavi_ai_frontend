@@ -1,19 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn, formatMessageTime } from "@/lib/utils";
 import { Icon } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import type { Message } from "@/types";
 
 interface PatientCommsPanelProps {
   patientName: string;
-  avatarUrl?: string;
   messages: Message[];
+  loading: boolean;
+  onSend: (text: string) => Promise<void>;
 }
 
-export function PatientCommsPanel({ patientName, avatarUrl, messages }: PatientCommsPanelProps) {
+export function PatientCommsPanel({ patientName, messages, loading, onSend }: PatientCommsPanelProps) {
   const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const handleSend = async () => {
+    const text = draft.trim();
+    if (!text || sending) return;
+    setSending(true);
+    try {
+      await onSend(text);
+      setDraft("");
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <div className="lg:col-span-4 h-full">
@@ -23,34 +37,21 @@ export function PatientCommsPanel({ patientName, avatarUrl, messages }: PatientC
       >
         <div className="bg-surface-container-low p-4 border-b border-surface-variant flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <Avatar name={patientName} src={avatarUrl} size={32} />
+            <Avatar name={patientName} size={32} />
             <div className="min-w-0">
               <p className="font-button text-button text-primary leading-tight truncate">Patient Comms</p>
-              <p className="text-[10px] text-green-600 font-semibold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Online
-              </p>
+              <p className="text-[10px] text-on-surface-variant">WhatsApp</p>
             </div>
           </div>
           <Icon name="more_vert" className="text-on-surface-variant !text-sm" />
         </div>
 
         <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3 bg-surface-container-low/30">
-          <div className="text-center my-2">
-            <span className="bg-surface-variant text-on-surface-variant text-[10px] px-2 py-1 rounded-full uppercase tracking-wider">
-              Today
-            </span>
-          </div>
+          {loading && <p className="text-center text-sm text-on-surface-variant">Loading conversation...</p>}
+          {!loading && messages.length === 0 && (
+            <p className="text-center text-sm text-on-surface-variant">No messages yet.</p>
+          )}
           {messages.map((message) => {
-            if (message.sender === "system") {
-              return (
-                <div
-                  key={message.id}
-                  className="self-center bg-primary-fixed-dim/30 text-primary-container text-xs px-3 py-1.5 rounded-lg text-center max-w-[80%] border border-primary-fixed"
-                >
-                  {message.text}
-                </div>
-              );
-            }
             const isStaff = message.sender === "staff";
             return (
               <div
@@ -63,9 +64,9 @@ export function PatientCommsPanel({ patientName, avatarUrl, messages }: PatientC
                 )}
               >
                 <p className="text-sm break-words whitespace-pre-wrap">{message.text}</p>
-                <div className={cn("flex items-center gap-1 mt-1", isStaff ? "justify-end" : "justify-end")}>
+                <div className="flex items-center gap-1 mt-1 justify-end">
                   <span className={cn("text-[10px]", isStaff ? "text-primary-container/70" : "text-on-surface-variant")}>
-                    {message.timestamp}
+                    {formatMessageTime(message.timestamp)}
                   </span>
                   {isStaff && message.read && (
                     <Icon name="done_all" className="!text-[14px] text-primary" />
@@ -86,10 +87,17 @@ export function PatientCommsPanel({ patientName, avatarUrl, messages }: PatientC
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
           />
           <button
-            className="p-2 bg-secondary text-white rounded-full hover:opacity-90 shadow-sm flex items-center justify-center"
-            onClick={() => setDraft("")}
+            className="p-2 bg-secondary text-white rounded-full hover:opacity-90 shadow-sm flex items-center justify-center disabled:opacity-50"
+            onClick={handleSend}
+            disabled={sending || !draft.trim()}
           >
             <Icon name="send" className="!text-sm" filled />
           </button>

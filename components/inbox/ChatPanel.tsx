@@ -5,33 +5,44 @@ import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { Icon } from "@/components/ui/Icon";
-import { cn } from "@/lib/utils";
-import type { Conversation } from "@/types";
+import { cn, formatMessageTime } from "@/lib/utils";
+import type { Conversation, Message } from "@/types";
 
 interface ChatPanelProps {
   conversation: Conversation;
+  messages: Message[];
+  loading: boolean;
+  onSend: (text: string) => Promise<void>;
 }
 
-export function ChatPanel({ conversation }: ChatPanelProps) {
+export function ChatPanel({ conversation, messages, loading, onSend }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const handleSend = async () => {
+    const text = draft.trim();
+    if (!text || sending) return;
+    setSending(true);
+    try {
+      await onSend(text);
+      setDraft("");
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <div className="lg:col-span-8 xl:col-span-9 flex flex-col bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden shadow-sm ambient-shadow">
       <div className="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-bright gap-3 flex-wrap">
         <div className="flex items-center gap-4 min-w-0">
-          <Avatar name={conversation.patientName} src={conversation.avatarUrl} size={48} />
+          <Avatar name={conversation.patientName ?? "?"} size={48} />
           <div className="min-w-0">
             <h3 className="font-headline-md text-headline-md text-primary text-xl truncate">
-              {conversation.patientName}
+              {conversation.patientName ?? "Unknown Contact"}
             </h3>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              {conversation.online && (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-green-500" />
-                  <span className="text-sm text-on-surface-variant">Online via WhatsApp</span>
-                  <span className="mx-1 text-outline-variant">•</span>
-                </>
-              )}
+              <span className="text-sm text-on-surface-variant">{conversation.phone}</span>
+              <span className="mx-1 text-outline-variant">•</span>
               <StatusTag status={conversation.status} />
             </div>
           </div>
@@ -44,9 +55,6 @@ export function ChatPanel({ conversation }: ChatPanelProps) {
           >
             <Icon name="person" />
           </Link>
-          <button className="p-2 rounded-full hover:bg-surface-container-low text-on-surface transition-colors" title="Mark as Booked">
-            <Icon name="check_circle" />
-          </button>
           <button className="p-2 rounded-full hover:bg-surface-container-low text-on-surface transition-colors" title="More Options">
             <Icon name="more_vert" />
           </button>
@@ -55,19 +63,11 @@ export function ChatPanel({ conversation }: ChatPanelProps) {
 
       <div className="flex-1 overflow-y-auto p-6 bg-[#FAF9F7] relative">
         <div className="flex flex-col gap-4 relative z-10">
-          <div className="flex justify-center my-2">
-            <span className="text-xs bg-surface-container px-3 py-1 rounded-full text-on-surface-variant">
-              Today
-            </span>
-          </div>
-          {conversation.messages.map((message) => {
-            if (message.sender === "system") {
-              return (
-                <div key={message.id} className="self-center bg-primary-fixed-dim/30 text-primary-container text-xs px-3 py-1.5 rounded-lg text-center max-w-[80%] border border-primary-fixed mx-auto">
-                  {message.text}
-                </div>
-              );
-            }
+          {loading && <p className="text-center text-sm text-on-surface-variant">Loading conversation...</p>}
+          {!loading && messages.length === 0 && (
+            <p className="text-center text-sm text-on-surface-variant">No messages in this conversation yet.</p>
+          )}
+          {messages.map((message) => {
             const isStaff = message.sender === "staff";
             return (
               <div
@@ -93,7 +93,7 @@ export function ChatPanel({ conversation }: ChatPanelProps) {
                     isStaff ? "mr-1" : "ml-1",
                   )}
                 >
-                  {message.timestamp}
+                  {formatMessageTime(message.timestamp)}
                   {message.read ? " • Read" : ""}
                 </span>
               </div>
@@ -113,22 +113,23 @@ export function ChatPanel({ conversation }: ChatPanelProps) {
             rows={2}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
           />
           <div className="flex justify-between items-center px-3 pb-2 flex-wrap gap-2">
-            <div className="flex gap-2">
-              <button className="text-xs bg-surface-container-high px-2 py-1 rounded text-on-surface-variant hover:bg-surface-variant transition-colors">
-                /brochure
-              </button>
-              <button className="text-xs bg-surface-container-high px-2 py-1 rounded text-on-surface-variant hover:bg-surface-variant transition-colors">
-                /weekend_slots
-              </button>
-            </div>
-            <span className="text-xs text-outline">Press Enter to send</span>
+            <span className="text-xs text-outline">
+              {sending ? "Sending..." : "Press Enter to send"}
+            </span>
           </div>
         </div>
         <button
-          className="p-3 bg-secondary text-on-secondary rounded-xl shadow-[0_4px_14px_0_rgba(169,51,73,0.39)] hover:opacity-90 transition-opacity mb-1 flex items-center justify-center"
-          onClick={() => setDraft("")}
+          className="p-3 bg-secondary text-on-secondary rounded-xl shadow-[0_4px_14px_0_rgba(169,51,73,0.39)] hover:opacity-90 transition-opacity mb-1 flex items-center justify-center disabled:opacity-50"
+          onClick={handleSend}
+          disabled={sending || !draft.trim()}
         >
           <Icon name="send" />
         </button>

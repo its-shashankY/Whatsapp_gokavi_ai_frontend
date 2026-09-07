@@ -1,7 +1,7 @@
 import { Icon } from "@/components/ui/Icon";
-import type { FunnelStage } from "@/types";
+import type { EnrichedFunnelStage } from "./presentation";
 
-export function FunnelChart({ stages }: { stages: FunnelStage[] }) {
+export function FunnelChart({ stages }: { stages: EnrichedFunnelStage[] }) {
   return (
     <div className="md:col-span-8 bg-surface-container-lowest rounded-xl p-8 card-shadow border border-outline-variant/30 flex flex-col">
       <h3 className="font-headline-md text-headline-md text-primary mb-6">Patient Conversion Funnel</h3>
