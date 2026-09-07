@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Self-hosted so the icon set renders without depending on Google Fonts
+   being reachable at runtime (some hospital networks restrict outbound
+   third-party requests). */
+@font-face {
+  font-family: "Material Symbols Outlined";
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: block;
+  src: url("/fonts/material-symbols-outlined.woff2") format("woff2");
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: #f7f9fb;
+  color: #191c1e;
+}
+
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.material-symbols-outlined.fill {
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+.ambient-shadow {
+  box-shadow: 0 10px 40px -10px rgba(7, 2, 53, 0.05);
+}
+
+.card-shadow {
+  box-shadow: 0 4px 24px rgba(7, 2, 53, 0.04);
+}
+
+.urgent-glow {
+  box-shadow:
+    0 0 15px rgba(186, 26, 26, 0.1),
+    inset 4px 0 0 rgba(186, 26, 26, 0.8);
+}
