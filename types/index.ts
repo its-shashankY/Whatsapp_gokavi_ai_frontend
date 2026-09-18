@@ -62,6 +62,16 @@ export interface CycleStep {
   state: "completed" | "current" | "upcoming";
 }
 
+export interface PatientReportEntry {
+  id: string;
+  mediaType: "image" | "document" | "audio" | "video";
+  filename: string | null;
+  createdAt: string;
+  /** Time-limited signed URL — null if archiving wasn't configured or failed;
+   * staff fall back to the WhatsApp conversation itself in that case. */
+  downloadUrl: string | null;
+}
+
 export interface Patient {
   id: string;
   name: string | null;
@@ -75,6 +85,8 @@ export interface Patient {
   phone: string;
   language: LanguageCode;
   consents: ConsentItem[];
+  hasReports: boolean;
+  reports?: PatientReportEntry[];
   /** Present only when the viewing role can see clinical notes (doctor/nurse/superadmin). */
   cycle?: CycleStep[];
   medications?: MedicationEntry[];

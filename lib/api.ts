@@ -17,6 +17,7 @@ import type {
   MedicationOrderInput,
   Message,
   Patient,
+  PatientReportEntry,
 } from "@/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -163,6 +164,7 @@ interface RawPatientSummary {
   lead_status: LeadStatus;
   blood_group: string | null;
   preferred_language: LanguageCode;
+  has_reports: boolean;
 }
 
 function mapPatientSummary(raw: RawPatientSummary): Patient {
@@ -178,11 +180,15 @@ function mapPatientSummary(raw: RawPatientSummary): Patient {
     phone: raw.phone,
     language: raw.preferred_language,
     consents: [],
+    hasReports: raw.has_reports,
   };
 }
 
-export async function listPatients(): Promise<Patient[]> {
-  const raw = await request<RawPatientSummary[]>("/admin/patients");
+export async function listPatients(options?: { hasReports?: boolean }): Promise<Patient[]> {
+  const params = new URLSearchParams();
+  if (options?.hasReports !== undefined) params.set("has_reports", String(options.hasReports));
+  const query = params.toString();
+  const raw = await request<RawPatientSummary[]>(`/admin/patients${query ? `?${query}` : ""}`);
   return raw.map(mapPatientSummary);
 }
 
@@ -208,6 +214,14 @@ interface RawMedication {
   status: string;
 }
 
+interface RawPatientReport {
+  id: string;
+  media_type: string;
+  filename: string | null;
+  created_at: string;
+  download_url: string | null;
+}
+
 interface RawPatientDetail {
   id: string;
   phone: string;
@@ -219,6 +233,7 @@ interface RawPatientDetail {
   lead_status: LeadStatus;
   preferred_language: LanguageCode;
   consents: RawConsent[];
+  reports: RawPatientReport[];
   cycle_label?: string | null;
   cycle_progress?: RawCycleStep[];
   medications?: RawMedication[];
@@ -242,6 +257,14 @@ function mapPatientDetail(raw: RawPatientDetail): Patient {
       description: c.description,
       granted: c.granted,
       updatedAt: c.updated_at,
+    })),
+    hasReports: raw.reports.length > 0,
+    reports: raw.reports.map((r) => ({
+      id: r.id,
+      mediaType: r.media_type as PatientReportEntry["mediaType"],
+      filename: r.filename,
+      createdAt: r.created_at,
+      downloadUrl: r.download_url,
     })),
     cycle: raw.cycle_progress?.map((s) => ({ id: s.id, label: s.label, detail: s.detail, state: s.state })),
     medications: raw.medications?.map(

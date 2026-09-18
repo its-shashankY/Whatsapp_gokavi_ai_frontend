@@ -11,18 +11,20 @@ import type { Patient } from "@/types";
 
 export default function PatientRecordsPage() {
   const [query, setQuery] = useState("");
+  const [hasReportsOnly, setHasReportsOnly] = useState(false);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    listPatients()
+    setLoading(true);
+    listPatients(hasReportsOnly ? { hasReports: true } : undefined)
       .then((data) => !cancelled && setPatients(data))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [hasReportsOnly]);
 
   const filtered = patients.filter(
     (p) =>
@@ -41,14 +43,29 @@ export default function PatientRecordsPage() {
           </p>
         </div>
 
-        <div className="relative max-w-md">
-          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-outline !text-[20px]" />
-          <input
-            className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent"
-            placeholder="Search by name or phone..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative max-w-md flex-1 min-w-[240px]">
+            <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-outline !text-[20px]" />
+            <input
+              className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent"
+              placeholder="Search by name or phone..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setHasReportsOnly((v) => !v)}
+            aria-pressed={hasReportsOnly}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              hasReportsOnly
+                ? "bg-secondary/10 border-secondary text-secondary"
+                : "bg-surface-container-low border-outline-variant text-on-surface-variant hover:bg-surface-container"
+            }`}
+          >
+            <Icon name="description" className="!text-[18px]" />
+            Has reports
+          </button>
         </div>
 
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant card-shadow divide-y divide-surface-variant overflow-hidden">
@@ -67,6 +84,13 @@ export default function PatientRecordsPage() {
                   </p>
                   <p className="text-sm text-on-surface-variant truncate">{patient.phone}</p>
                 </div>
+                {patient.hasReports && (
+                  <Icon
+                    name="description"
+                    className="!text-[18px] text-secondary flex-shrink-0"
+                    aria-label="Has submitted reports"
+                  />
+                )}
                 <StatusTag status={patient.status} />
                 <Icon name="chevron_right" className="text-on-surface-variant flex-shrink-0" />
               </Link>
