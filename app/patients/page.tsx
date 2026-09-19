@@ -12,19 +12,23 @@ import type { Patient } from "@/types";
 export default function PatientRecordsPage() {
   const [query, setQuery] = useState("");
   const [hasReportsOnly, setHasReportsOnly] = useState(false);
+  const [hasDiseaseOnly, setHasDiseaseOnly] = useState(false);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    listPatients(hasReportsOnly ? { hasReports: true } : undefined)
+    const options: { hasReports?: boolean; hasDisease?: boolean } = {};
+    if (hasReportsOnly) options.hasReports = true;
+    if (hasDiseaseOnly) options.hasDisease = true;
+    listPatients(Object.keys(options).length ? options : undefined)
       .then((data) => !cancelled && setPatients(data))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [hasReportsOnly]);
+  }, [hasReportsOnly, hasDiseaseOnly]);
 
   const filtered = patients.filter(
     (p) =>
@@ -66,6 +70,19 @@ export default function PatientRecordsPage() {
             <Icon name="description" className="!text-[18px]" />
             Has reports
           </button>
+          <button
+            type="button"
+            onClick={() => setHasDiseaseOnly((v) => !v)}
+            aria-pressed={hasDiseaseOnly}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              hasDiseaseOnly
+                ? "bg-secondary/10 border-secondary text-secondary"
+                : "bg-surface-container-low border-outline-variant text-on-surface-variant hover:bg-surface-container"
+            }`}
+          >
+            <Icon name="medical_information" className="!text-[18px]" />
+            Has disease mentioned
+          </button>
         </div>
 
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant card-shadow divide-y divide-surface-variant overflow-hidden">
@@ -89,6 +106,14 @@ export default function PatientRecordsPage() {
                     name="description"
                     className="!text-[18px] text-secondary flex-shrink-0"
                     aria-label="Has submitted reports"
+                  />
+                )}
+                {patient.hasDiseaseMentioned && (
+                  <Icon
+                    name="medical_information"
+                    className="!text-[18px] text-secondary flex-shrink-0"
+                    aria-label={`Condition mentioned: ${patient.detectedCondition}`}
+                    title={patient.detectedCondition ?? undefined}
                   />
                 )}
                 <StatusTag status={patient.status} />

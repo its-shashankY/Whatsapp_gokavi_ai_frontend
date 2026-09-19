@@ -7,6 +7,7 @@ import { ConsentStatusCard } from "@/components/patient/ConsentStatusCard";
 import { CycleProgressCard } from "@/components/patient/CycleProgressCard";
 import { MedicationsCard } from "@/components/patient/MedicationsCard";
 import { ReportsCard } from "@/components/patient/ReportsCard";
+import { DiseaseCard } from "@/components/patient/DiseaseCard";
 import { PatientCommsPanel } from "@/components/patient/PatientCommsPanel";
 import { ApiError, getConversationThread, getPatientDetail, sendMessage } from "@/lib/api";
 import type { Message, Patient } from "@/types";
@@ -81,6 +82,9 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
           </div>
           {patient.medications && <MedicationsCard medications={patient.medications} />}
           {patient.hasReports && <ReportsCard reports={patient.reports ?? []} />}
+          {patient.hasDiseaseMentioned && patient.detectedCondition && (
+            <DiseaseCard condition={patient.detectedCondition} evidence={patient.conditionEvidence} />
+          )}
         </div>
         <PatientCommsPanel
           patientName={patient.name ?? "Unknown Contact"}

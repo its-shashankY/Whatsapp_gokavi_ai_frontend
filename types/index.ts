@@ -87,6 +87,12 @@ export interface Patient {
   consents: ConsentItem[];
   hasReports: boolean;
   reports?: PatientReportEntry[];
+  /** True when app.services.condition_detection flagged a condition mentioned
+   * in the patient's chat, in English or Kannada — see detectedCondition. */
+  hasDiseaseMentioned: boolean;
+  detectedCondition?: string | null;
+  /** Verbatim patient message that led to the detection, for staff to verify. */
+  conditionEvidence?: string | null;
   /** Present only when the viewing role can see clinical notes (doctor/nurse/superadmin). */
   cycle?: CycleStep[];
   medications?: MedicationEntry[];
