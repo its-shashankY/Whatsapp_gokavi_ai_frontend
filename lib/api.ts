@@ -187,10 +187,13 @@ function mapPatientSummary(raw: RawPatientSummary): Patient {
   };
 }
 
-export async function listPatients(options?: { hasReports?: boolean; hasDisease?: boolean }): Promise<Patient[]> {
+export async function listPatients(
+  options?: { hasReports?: boolean; hasDisease?: boolean; hasName?: boolean },
+): Promise<Patient[]> {
   const params = new URLSearchParams();
   if (options?.hasReports !== undefined) params.set("has_reports", String(options.hasReports));
   if (options?.hasDisease !== undefined) params.set("has_disease", String(options.hasDisease));
+  if (options?.hasName !== undefined) params.set("has_name", String(options.hasName));
   const query = params.toString();
   const raw = await request<RawPatientSummary[]>(`/admin/patients${query ? `?${query}` : ""}`);
   return raw.map(mapPatientSummary);
