@@ -93,10 +93,15 @@ export interface Patient {
   detectedCondition?: string | null;
   /** Verbatim patient message that led to the detection, for staff to verify. */
   conditionEvidence?: string | null;
+  /** Staff's own manual "have I dealt with this one" tracking — independent
+   * of status/rawStatus, which reflect the patient's own lead/clinical state. */
+  followUpStatus: FollowUpStatus;
   /** Present only when the viewing role can see clinical notes (doctor/nurse/superadmin). */
   cycle?: CycleStep[];
   medications?: MedicationEntry[];
 }
+
+export type FollowUpStatus = "NOT_TOUCHED" | "ON_HOLD" | "COMPLETED";
 
 export type AppointmentSlotStatus = "available" | "booked" | "blocked";
 

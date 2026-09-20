@@ -6,31 +6,54 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Avatar } from "@/components/ui/Avatar";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { Icon } from "@/components/ui/Icon";
+import { FollowUpStatusControl } from "@/components/patient/FollowUpStatusControl";
 import { listPatients } from "@/lib/api";
-import type { Patient } from "@/types";
+import type { FollowUpStatus, Patient } from "@/types";
+
+const FOLLOW_UP_FILTER_LABEL: Record<"ALL" | FollowUpStatus, string> = {
+  ALL: "All follow-up states",
+  NOT_TOUCHED: "Not touched",
+  ON_HOLD: "On hold",
+  COMPLETED: "Completed",
+};
 
 export default function PatientRecordsPage() {
   const [query, setQuery] = useState("");
   const [hasReportsOnly, setHasReportsOnly] = useState(false);
   const [hasDiseaseOnly, setHasDiseaseOnly] = useState(false);
   const [knownOnly, setKnownOnly] = useState(false);
+  const [followUpFilter, setFollowUpFilter] = useState<"ALL" | FollowUpStatus>("ALL");
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const options: { hasReports?: boolean; hasDisease?: boolean; hasName?: boolean } = {};
+    const options: { hasReports?: boolean; hasDisease?: boolean; hasName?: boolean; followUpStatus?: FollowUpStatus } = {};
     if (hasReportsOnly) options.hasReports = true;
     if (hasDiseaseOnly) options.hasDisease = true;
     if (knownOnly) options.hasName = true;
+    if (followUpFilter !== "ALL") options.followUpStatus = followUpFilter;
     listPatients(Object.keys(options).length ? options : undefined)
       .then((data) => !cancelled && setPatients(data))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [hasReportsOnly, hasDiseaseOnly, knownOnly]);
+  }, [hasReportsOnly, hasDiseaseOnly, knownOnly, followUpFilter]);
+
+  function handleFollowUpChanged(patientId: string, newStatus: FollowUpStatus) {
+    setPatients((prev) => {
+      // Currently filtered to a specific state and this patient no longer
+      // matches it — drop it from view immediately rather than waiting for
+      // a refetch, so working through a queue (e.g. "Not touched") shows
+      // real progress as each one gets marked.
+      if (followUpFilter !== "ALL" && newStatus !== followUpFilter) {
+        return prev.filter((p) => p.id !== patientId);
+      }
+      return prev.map((p) => (p.id === patientId ? { ...p, followUpStatus: newStatus } : p));
+    });
+  }
 
   const filtered = patients.filter(
     (p) =>
@@ -98,6 +121,17 @@ export default function PatientRecordsPage() {
             <Icon name="badge" className="!text-[18px]" />
             Known patients
           </button>
+          <select
+            value={followUpFilter}
+            onChange={(e) => setFollowUpFilter(e.target.value as "ALL" | FollowUpStatus)}
+            className="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-low text-sm font-medium text-on-surface-variant focus:outline-none focus:ring-2 focus:ring-secondary"
+          >
+            {(Object.keys(FOLLOW_UP_FILTER_LABEL) as ("ALL" | FollowUpStatus)[]).map((value) => (
+              <option key={value} value={value}>
+                {FOLLOW_UP_FILTER_LABEL[value]}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant card-shadow divide-y divide-surface-variant overflow-hidden">
@@ -132,6 +166,11 @@ export default function PatientRecordsPage() {
                     <span className="truncate">{patient.detectedCondition}</span>
                   </span>
                 )}
+                <FollowUpStatusControl
+                  patientId={patient.id}
+                  status={patient.followUpStatus}
+                  onChanged={(next) => handleFollowUpChanged(patient.id, next)}
+                />
                 <StatusTag status={patient.status} />
                 <Icon name="chevron_right" className="text-on-surface-variant flex-shrink-0" />
               </Link>

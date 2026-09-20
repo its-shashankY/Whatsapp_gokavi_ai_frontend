@@ -10,6 +10,7 @@ import type {
   EscalationSeverity,
   EscalationStatusValue,
   EscalationTrigger,
+  FollowUpStatus,
   LabResultInput,
   LanguageCode,
   LeadStatus,
@@ -166,6 +167,7 @@ interface RawPatientSummary {
   preferred_language: LanguageCode;
   has_reports: boolean;
   detected_condition: string | null;
+  follow_up_status: FollowUpStatus;
 }
 
 function mapPatientSummary(raw: RawPatientSummary): Patient {
@@ -184,16 +186,18 @@ function mapPatientSummary(raw: RawPatientSummary): Patient {
     hasReports: raw.has_reports,
     hasDiseaseMentioned: raw.detected_condition !== null,
     detectedCondition: raw.detected_condition,
+    followUpStatus: raw.follow_up_status,
   };
 }
 
 export async function listPatients(
-  options?: { hasReports?: boolean; hasDisease?: boolean; hasName?: boolean },
+  options?: { hasReports?: boolean; hasDisease?: boolean; hasName?: boolean; followUpStatus?: FollowUpStatus },
 ): Promise<Patient[]> {
   const params = new URLSearchParams();
   if (options?.hasReports !== undefined) params.set("has_reports", String(options.hasReports));
   if (options?.hasDisease !== undefined) params.set("has_disease", String(options.hasDisease));
   if (options?.hasName !== undefined) params.set("has_name", String(options.hasName));
+  if (options?.followUpStatus !== undefined) params.set("follow_up_status", options.followUpStatus);
   const query = params.toString();
   const raw = await request<RawPatientSummary[]>(`/admin/patients${query ? `?${query}` : ""}`);
   return raw.map(mapPatientSummary);
@@ -243,6 +247,7 @@ interface RawPatientDetail {
   reports: RawPatientReport[];
   detected_condition: string | null;
   condition_evidence: string | null;
+  follow_up_status: FollowUpStatus;
   cycle_label?: string | null;
   cycle_progress?: RawCycleStep[];
   medications?: RawMedication[];
@@ -278,6 +283,7 @@ function mapPatientDetail(raw: RawPatientDetail): Patient {
     hasDiseaseMentioned: raw.detected_condition !== null,
     detectedCondition: raw.detected_condition,
     conditionEvidence: raw.condition_evidence,
+    followUpStatus: raw.follow_up_status,
     cycle: raw.cycle_progress?.map((s) => ({ id: s.id, label: s.label, detail: s.detail, state: s.state })),
     medications: raw.medications?.map(
       (m): MedicationEntry => ({
@@ -293,6 +299,14 @@ function mapPatientDetail(raw: RawPatientDetail): Patient {
 export async function getPatientDetail(id: string): Promise<Patient> {
   const raw = await request<RawPatientDetail>(`/admin/patients/${id}`);
   return mapPatientDetail(raw);
+}
+
+export async function updateFollowUpStatus(patientId: string, status: FollowUpStatus): Promise<FollowUpStatus> {
+  const raw = await request<{ follow_up_status: FollowUpStatus }>(`/admin/patients/${patientId}/follow-up-status`, {
+    method: "POST",
+    body: JSON.stringify({ status }),
+  });
+  return raw.follow_up_status;
 }
 
 // ── Calendar ─────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { Avatar } from "@/components/ui/Avatar";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { Icon } from "@/components/ui/Icon";
+import { FollowUpStatusControl } from "@/components/patient/FollowUpStatusControl";
 import type { Patient } from "@/types";
 
 export function PatientHeader({ patient }: { patient: Patient }) {
@@ -22,6 +23,7 @@ export function PatientHeader({ patient }: { patient: Patient }) {
             MRN: {patient.id.slice(0, 8).toUpperCase()}
           </span>
           <StatusTag status={patient.status} />
+          <FollowUpStatusControl patientId={patient.id} status={patient.followUpStatus} />
         </div>
         {subtitleParts.length > 0 && (
           <p className="font-body-md text-body-md text-on-surface-variant mb-4">
