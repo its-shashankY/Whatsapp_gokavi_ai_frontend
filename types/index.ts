@@ -96,6 +96,10 @@ export interface Patient {
   /** Staff's own manual "have I dealt with this one" tracking — independent
    * of status/rawStatus, which reflect the patient's own lead/clinical state. */
   followUpStatus: FollowUpStatus;
+  /** True when the patient's most recent message came AFTER staff last
+   * messaged them manually from the dashboard (a bot reply doesn't count) —
+   * i.e. staff reached out and the patient has replied since. */
+  hasReplied: boolean;
   /** Present only when the viewing role can see clinical notes (doctor/nurse/superadmin). */
   cycle?: CycleStep[];
   medications?: MedicationEntry[];

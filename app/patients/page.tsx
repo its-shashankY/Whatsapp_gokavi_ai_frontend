@@ -23,24 +23,32 @@ export default function PatientRecordsPage() {
   const [hasDiseaseOnly, setHasDiseaseOnly] = useState(false);
   const [knownOnly, setKnownOnly] = useState(false);
   const [followUpFilter, setFollowUpFilter] = useState<"ALL" | FollowUpStatus>("ALL");
+  const [hasRepliedOnly, setHasRepliedOnly] = useState(false);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const options: { hasReports?: boolean; hasDisease?: boolean; hasName?: boolean; followUpStatus?: FollowUpStatus } = {};
+    const options: {
+      hasReports?: boolean;
+      hasDisease?: boolean;
+      hasName?: boolean;
+      followUpStatus?: FollowUpStatus;
+      hasReplied?: boolean;
+    } = {};
     if (hasReportsOnly) options.hasReports = true;
     if (hasDiseaseOnly) options.hasDisease = true;
     if (knownOnly) options.hasName = true;
     if (followUpFilter !== "ALL") options.followUpStatus = followUpFilter;
+    if (hasRepliedOnly) options.hasReplied = true;
     listPatients(Object.keys(options).length ? options : undefined)
       .then((data) => !cancelled && setPatients(data))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [hasReportsOnly, hasDiseaseOnly, knownOnly, followUpFilter]);
+  }, [hasReportsOnly, hasDiseaseOnly, knownOnly, followUpFilter, hasRepliedOnly]);
 
   function handleFollowUpChanged(patientId: string, newStatus: FollowUpStatus) {
     setPatients((prev) => {
@@ -132,6 +140,19 @@ export default function PatientRecordsPage() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={() => setHasRepliedOnly((v) => !v)}
+            aria-pressed={hasRepliedOnly}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              hasRepliedOnly
+                ? "bg-secondary/10 border-secondary text-secondary"
+                : "bg-surface-container-low border-outline-variant text-on-surface-variant hover:bg-surface-container"
+            }`}
+          >
+            <Icon name="reply" className="!text-[18px]" />
+            Replied
+          </button>
         </div>
 
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant card-shadow divide-y divide-surface-variant overflow-hidden">
@@ -164,6 +185,15 @@ export default function PatientRecordsPage() {
                   >
                     <Icon name="medical_information" className="!text-[14px] flex-shrink-0" />
                     <span className="truncate">{patient.detectedCondition}</span>
+                  </span>
+                )}
+                {patient.hasReplied && (
+                  <span
+                    className="flex items-center gap-1 px-2 py-1 rounded-md bg-green-100 text-green-800 text-xs font-medium flex-shrink-0"
+                    title="Patient has replied since staff last messaged them"
+                  >
+                    <Icon name="reply" className="!text-[14px]" />
+                    Replied
                   </span>
                 )}
                 <FollowUpStatusControl
