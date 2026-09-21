@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Avatar } from "@/components/ui/Avatar";
 import { StatusTag } from "@/components/ui/StatusTag";
@@ -17,38 +18,89 @@ const FOLLOW_UP_FILTER_LABEL: Record<"ALL" | FollowUpStatus, string> = {
   COMPLETED: "Completed",
 };
 
+const FOLLOW_UP_VALUES = new Set(["NOT_TOUCHED", "ON_HOLD", "COMPLETED"]);
+
+// Row background reflects who last spoke in the conversation — green means
+// staff/the bot answered last, red means the customer's reply is the latest
+// thing and still awaiting a response. No message yet stays neutral.
+const ROW_TINT: Record<"IN" | "OUT", string> = {
+  OUT: "bg-green-50 hover:bg-green-100",
+  IN: "bg-red-50 hover:bg-red-100",
+};
+
+function readFiltersFromParams(params: URLSearchParams) {
+  const followUp = params.get("followUp");
+  return {
+    query: params.get("q") ?? "",
+    hasReportsOnly: params.get("hasReports") === "1",
+    hasDiseaseOnly: params.get("hasDisease") === "1",
+    followUpFilter: (followUp && FOLLOW_UP_VALUES.has(followUp) ? followUp : "ALL") as "ALL" | FollowUpStatus,
+    hasRepliedOnly: params.get("hasReplied") === "1",
+  };
+}
+
 export default function PatientRecordsPage() {
-  const [query, setQuery] = useState("");
-  const [hasReportsOnly, setHasReportsOnly] = useState(false);
-  const [hasDiseaseOnly, setHasDiseaseOnly] = useState(false);
-  const [knownOnly, setKnownOnly] = useState(false);
-  const [followUpFilter, setFollowUpFilter] = useState<"ALL" | FollowUpStatus>("ALL");
-  const [hasRepliedOnly, setHasRepliedOnly] = useState(false);
+  return (
+    <Suspense fallback={null}>
+      <PatientRecordsPageInner />
+    </Suspense>
+  );
+}
+
+function PatientRecordsPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initial = readFiltersFromParams(searchParams);
+
+  const [query, setQuery] = useState(initial.query);
+  const [hasReportsOnly, setHasReportsOnly] = useState(initial.hasReportsOnly);
+  const [hasDiseaseOnly, setHasDiseaseOnly] = useState(initial.hasDiseaseOnly);
+  const [followUpFilter, setFollowUpFilter] = useState<"ALL" | FollowUpStatus>(initial.followUpFilter);
+  const [hasRepliedOnly, setHasRepliedOnly] = useState(initial.hasRepliedOnly);
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Only true before the very first load ever completes — a filter change
+  // afterwards just refetches quietly, keeping the current rows on screen
+  // instead of blanking the list while the new page loads.
+  const [initialLoading, setInitialLoading] = useState(true);
+  const hasLoadedOnce = useRef(false);
+
+  // Keep the URL in sync with the active filters so navigating away (e.g.
+  // into a patient's record) and back restores the exact same filtered view.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (hasReportsOnly) params.set("hasReports", "1");
+    if (hasDiseaseOnly) params.set("hasDisease", "1");
+    if (followUpFilter !== "ALL") params.set("followUp", followUpFilter);
+    if (hasRepliedOnly) params.set("hasReplied", "1");
+    const qs = params.toString();
+    router.replace(qs ? `/patients?${qs}` : "/patients", { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, hasReportsOnly, hasDiseaseOnly, followUpFilter, hasRepliedOnly]);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     const options: {
       hasReports?: boolean;
       hasDisease?: boolean;
-      hasName?: boolean;
       followUpStatus?: FollowUpStatus;
       hasReplied?: boolean;
     } = {};
     if (hasReportsOnly) options.hasReports = true;
     if (hasDiseaseOnly) options.hasDisease = true;
-    if (knownOnly) options.hasName = true;
     if (followUpFilter !== "ALL") options.followUpStatus = followUpFilter;
     if (hasRepliedOnly) options.hasReplied = true;
     listPatients(Object.keys(options).length ? options : undefined)
-      .then((data) => !cancelled && setPatients(data))
-      .finally(() => !cancelled && setLoading(false));
+      .then((data) => {
+        if (cancelled) return;
+        setPatients(data);
+        hasLoadedOnce.current = true;
+      })
+      .finally(() => !cancelled && setInitialLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [hasReportsOnly, hasDiseaseOnly, knownOnly, followUpFilter, hasRepliedOnly]);
+  }, [hasReportsOnly, hasDiseaseOnly, followUpFilter, hasRepliedOnly]);
 
   function handleFollowUpChanged(patientId: string, newStatus: FollowUpStatus) {
     setPatients((prev) => {
@@ -69,6 +121,8 @@ export default function PatientRecordsPage() {
       p.phone.includes(query) ||
       p.id.toLowerCase().includes(query.toLowerCase()),
   );
+
+  const showEmptyLoadingState = initialLoading && !hasLoadedOnce.current;
 
   return (
     <DashboardShell title="Gokavi Admin">
@@ -116,19 +170,6 @@ export default function PatientRecordsPage() {
             <Icon name="medical_information" className="!text-[18px]" />
             Has disease mentioned
           </button>
-          <button
-            type="button"
-            onClick={() => setKnownOnly((v) => !v)}
-            aria-pressed={knownOnly}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
-              knownOnly
-                ? "bg-secondary/10 border-secondary text-secondary"
-                : "bg-surface-container-low border-outline-variant text-on-surface-variant hover:bg-surface-container"
-            }`}
-          >
-            <Icon name="badge" className="!text-[18px]" />
-            Known patients
-          </button>
           <select
             value={followUpFilter}
             onChange={(e) => setFollowUpFilter(e.target.value as "ALL" | FollowUpStatus)}
@@ -156,13 +197,15 @@ export default function PatientRecordsPage() {
         </div>
 
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant card-shadow divide-y divide-surface-variant overflow-hidden">
-          {loading && <p className="p-6 text-center text-on-surface-variant text-sm">Loading patients...</p>}
-          {!loading &&
+          {showEmptyLoadingState && <p className="p-6 text-center text-on-surface-variant text-sm">Loading patients...</p>}
+          {!showEmptyLoadingState &&
             filtered.map((patient) => (
               <Link
                 key={patient.id}
                 href={`/patients/${patient.id}`}
-                className="flex items-center gap-4 p-4 hover:bg-surface-container-low transition-colors"
+                className={`flex items-center gap-4 p-4 transition-colors ${
+                  patient.lastMessageDirection ? ROW_TINT[patient.lastMessageDirection] : "hover:bg-surface-container-low"
+                }`}
               >
                 <Avatar name={patient.name ?? "?"} size={44} />
                 <div className="flex-1 min-w-0">
@@ -205,7 +248,7 @@ export default function PatientRecordsPage() {
                 <Icon name="chevron_right" className="text-on-surface-variant flex-shrink-0" />
               </Link>
             ))}
-          {!loading && filtered.length === 0 && (
+          {!showEmptyLoadingState && filtered.length === 0 && (
             <p className="p-6 text-center text-on-surface-variant text-sm">No patients match your search.</p>
           )}
         </div>

@@ -54,8 +54,12 @@ export function setToken(token: string | null): void {
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
+  // A FormData body (voice note upload) must NOT get an explicit
+  // Content-Type here — the browser sets its own multipart/form-data with
+  // the correct boundary, which is lost if we override it.
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers: Record<string, string> = {
-    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(options.body && !isFormData ? { "Content-Type": "application/json" } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...((options.headers as Record<string, string>) ?? {}),
   };
@@ -130,6 +134,7 @@ interface RawMessage {
   body: string | null;
   status: string;
   created_at: string;
+  media_url?: string | null;
 }
 
 function mapMessage(raw: RawMessage): Message {
@@ -139,6 +144,8 @@ function mapMessage(raw: RawMessage): Message {
     text: raw.body ?? "",
     timestamp: raw.created_at,
     read: raw.direction === "OUT" ? raw.status === "READ" : undefined,
+    type: raw.message_type,
+    mediaUrl: raw.media_url ?? null,
   };
 }
 
@@ -151,6 +158,16 @@ export async function sendMessage(patientId: string, body: string): Promise<Mess
   const raw = await request<RawMessage>(`/admin/conversations/${patientId}/messages`, {
     method: "POST",
     body: JSON.stringify({ body }),
+  });
+  return mapMessage(raw);
+}
+
+export async function sendVoiceNote(patientId: string, audio: Blob, filename = "voice-note.webm"): Promise<Message> {
+  const formData = new FormData();
+  formData.append("audio", audio, filename);
+  const raw = await request<RawMessage>(`/admin/conversations/${patientId}/voice-note`, {
+    method: "POST",
+    body: formData,
   });
   return mapMessage(raw);
 }
@@ -169,6 +186,7 @@ interface RawPatientSummary {
   detected_condition: string | null;
   follow_up_status: FollowUpStatus;
   has_replied: boolean;
+  last_message_direction: "IN" | "OUT" | null;
 }
 
 function mapPatientSummary(raw: RawPatientSummary): Patient {
@@ -189,6 +207,7 @@ function mapPatientSummary(raw: RawPatientSummary): Patient {
     detectedCondition: raw.detected_condition,
     followUpStatus: raw.follow_up_status,
     hasReplied: raw.has_replied,
+    lastMessageDirection: raw.last_message_direction,
   };
 }
 
@@ -196,7 +215,6 @@ export async function listPatients(
   options?: {
     hasReports?: boolean;
     hasDisease?: boolean;
-    hasName?: boolean;
     followUpStatus?: FollowUpStatus;
     hasReplied?: boolean;
   },
@@ -204,7 +222,6 @@ export async function listPatients(
   const params = new URLSearchParams();
   if (options?.hasReports !== undefined) params.set("has_reports", String(options.hasReports));
   if (options?.hasDisease !== undefined) params.set("has_disease", String(options.hasDisease));
-  if (options?.hasName !== undefined) params.set("has_name", String(options.hasName));
   if (options?.followUpStatus !== undefined) params.set("follow_up_status", options.followUpStatus);
   if (options?.hasReplied !== undefined) params.set("has_replied", String(options.hasReplied));
   const query = params.toString();
@@ -258,6 +275,7 @@ interface RawPatientDetail {
   condition_evidence: string | null;
   follow_up_status: FollowUpStatus;
   has_replied: boolean;
+  last_message_direction: "IN" | "OUT" | null;
   cycle_label?: string | null;
   cycle_progress?: RawCycleStep[];
   medications?: RawMedication[];
@@ -295,6 +313,7 @@ function mapPatientDetail(raw: RawPatientDetail): Patient {
     conditionEvidence: raw.condition_evidence,
     followUpStatus: raw.follow_up_status,
     hasReplied: raw.has_replied,
+    lastMessageDirection: raw.last_message_direction,
     cycle: raw.cycle_progress?.map((s) => ({ id: s.id, label: s.label, detail: s.detail, state: s.state })),
     medications: raw.medications?.map(
       (m): MedicationEntry => ({

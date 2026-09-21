@@ -35,6 +35,11 @@ export interface Message {
   text: string;
   timestamp: string;
   read?: boolean;
+  /** "audio" for a voice note (staff-recorded or patient-sent) — render an
+   * <audio> player using mediaUrl instead of text in that case. */
+  type?: string;
+  /** Time-limited signed playback URL, present only for messages with media. */
+  mediaUrl?: string | null;
 }
 
 export interface Conversation {
@@ -100,6 +105,11 @@ export interface Patient {
    * messaged them manually from the dashboard (a bot reply doesn't count) —
    * i.e. staff reached out and the patient has replied since. */
   hasReplied: boolean;
+  /** Direction of the single most recent conversation message — "OUT" means
+   * staff/the bot answered last, "IN" means the customer's reply is the
+   * latest thing and awaiting a response, null means no messages yet.
+   * Drives the Patients list row coloring (green/red). */
+  lastMessageDirection?: "IN" | "OUT" | null;
   /** Present only when the viewing role can see clinical notes (doctor/nurse/superadmin). */
   cycle?: CycleStep[];
   medications?: MedicationEntry[];
