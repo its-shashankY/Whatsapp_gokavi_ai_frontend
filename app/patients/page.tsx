@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Avatar } from "@/components/ui/Avatar";
 import { StatusTag } from "@/components/ui/StatusTag";
@@ -48,7 +48,6 @@ export default function PatientRecordsPage() {
 }
 
 function PatientRecordsPageInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const initial = readFiltersFromParams(searchParams);
 
@@ -66,6 +65,11 @@ function PatientRecordsPageInner() {
 
   // Keep the URL in sync with the active filters so navigating away (e.g.
   // into a patient's record) and back restores the exact same filtered view.
+  // Deliberately NOT next/navigation's router.replace: calling that on every
+  // filter toggle re-triggers the useSearchParams() Suspense boundary above,
+  // which remounts this whole component and wipes patients/loading state —
+  // showing a full reload flash on every click. history.replaceState updates
+  // the address bar without touching Next's router at all, so nothing remounts.
   useEffect(() => {
     const params = new URLSearchParams();
     if (query) params.set("q", query);
@@ -74,8 +78,7 @@ function PatientRecordsPageInner() {
     if (followUpFilter !== "ALL") params.set("followUp", followUpFilter);
     if (hasRepliedOnly) params.set("hasReplied", "1");
     const qs = params.toString();
-    router.replace(qs ? `/patients?${qs}` : "/patients", { scroll: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    window.history.replaceState(null, "", qs ? `/patients?${qs}` : "/patients");
   }, [query, hasReportsOnly, hasDiseaseOnly, followUpFilter, hasRepliedOnly]);
 
   useEffect(() => {
