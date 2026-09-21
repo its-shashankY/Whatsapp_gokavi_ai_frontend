@@ -23,6 +23,33 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingPatient, setLoadingPatient] = useState(true);
   const [loadingThread, setLoadingThread] = useState(true);
+  // Distinct from "loaded, zero messages" — a real fetch failure (expired
+  // session, network error, backend 500) must never be shown to staff as
+  // "No messages yet", since that looks identical to a patient who simply
+  // never messaged and hides a real problem staff would want to retry.
+  const [threadError, setThreadError] = useState<string | null>(null);
+
+  const loadThread = useCallback(() => {
+    let cancelled = false;
+    setThreadError(null);
+    setLoadingThread(true);
+    getConversationThread(id)
+      .then((data) => !cancelled && setMessages(data))
+      .catch((err) => {
+        if (cancelled) return;
+        const message =
+          err instanceof ApiError
+            ? err.status === 401 || err.status === 403
+              ? "Your session may have expired — please refresh and sign in again."
+              : `Failed to load conversation (${err.status}). Please retry.`
+            : "Failed to load conversation — check your connection and retry.";
+        setThreadError(message);
+      })
+      .finally(() => !cancelled && setLoadingThread(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,17 +61,13 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
       })
       .finally(() => !cancelled && setLoadingPatient(false));
 
-    getConversationThread(id)
-      .then((data) => !cancelled && setMessages(data))
-      .catch(() => {
-        // No conversation history for this patient yet — thread just stays empty.
-      })
-      .finally(() => !cancelled && setLoadingThread(false));
+    const cancelThread = loadThread();
 
     return () => {
       cancelled = true;
+      cancelThread();
     };
-  }, [id]);
+  }, [id, loadThread]);
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -120,6 +143,8 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
             patientName={patient.name ?? "Unknown Contact"}
             messages={messages}
             loading={loadingThread}
+            error={threadError}
+            onRetry={loadThread}
             onSend={handleSend}
             onSendVoiceNote={handleSendVoiceNote}
           />

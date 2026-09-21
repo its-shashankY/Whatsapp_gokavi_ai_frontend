@@ -10,11 +10,23 @@ interface PatientCommsPanelProps {
   patientName: string;
   messages: Message[];
   loading: boolean;
+  /** Set when the thread failed to load — distinct from a genuinely empty
+   * conversation, so staff see "failed to load" instead of "no messages". */
+  error?: string | null;
+  onRetry?: () => void;
   onSend: (text: string) => Promise<void>;
   onSendVoiceNote: (blob: Blob) => Promise<void>;
 }
 
-export function PatientCommsPanel({ patientName, messages, loading, onSend, onSendVoiceNote }: PatientCommsPanelProps) {
+export function PatientCommsPanel({
+  patientName,
+  messages,
+  loading,
+  error,
+  onRetry,
+  onSend,
+  onSendVoiceNote,
+}: PatientCommsPanelProps) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -102,10 +114,24 @@ export function PatientCommsPanel({ patientName, messages, loading, onSend, onSe
 
         <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3 bg-surface-container-low/30">
           {loading && <p className="text-center text-sm text-on-surface-variant">Loading conversation...</p>}
-          {!loading && messages.length === 0 && (
+          {!loading && error && (
+            <div className="text-center text-sm">
+              <p className="text-red-600">{error}</p>
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="mt-2 px-3 py-1 rounded-full border border-outline-variant text-on-surface-variant hover:bg-surface-container text-xs font-medium"
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+          )}
+          {!loading && !error && messages.length === 0 && (
             <p className="text-center text-sm text-on-surface-variant">No messages yet.</p>
           )}
-          {messages.map((message) => {
+          {!loading && !error && messages.map((message) => {
             const isStaff = message.sender === "staff";
             return (
               <div
