@@ -52,6 +52,21 @@ export function setToken(token: string | null): void {
   }
 }
 
+// Same keys as lib/auth.tsx's ROLE_KEY/EMAIL_KEY — duplicated here rather
+// than imported to avoid a circular import (auth.tsx already imports this
+// file). Clears everything auth.tsx's AuthProvider reads on mount, so a
+// 401 here (see request() below) can force a real sign-out even though
+// this module has no access to React state.
+function clearSession(): void {
+  setToken(null);
+  try {
+    window.localStorage.removeItem("gokavi.auth.role");
+    window.localStorage.removeItem("gokavi.auth.email");
+  } catch {
+    // ignore
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   // A FormData body (voice note upload) must NOT get an explicit
@@ -73,6 +88,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       if (typeof body?.detail === "string") message = body.detail;
     } catch {
       // non-JSON error body — keep statusText
+    }
+    // A 401 means the token is missing/expired/invalid — never leave the
+    // UI sitting there re-rendering stale or empty data as if signed in.
+    // Login's own failed-attempt 401 (wrong password) must NOT bounce the
+    // user, since they're already on /login trying to get in.
+    if (res.status === 401 && path !== "/admin/auth/login") {
+      clearSession();
+      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
     }
     throw new ApiError(res.status, message);
   }
@@ -213,17 +238,27 @@ function mapPatientSummary(raw: RawPatientSummary): Patient {
 
 export async function listPatients(
   options?: {
+    /** Case-insensitive match against name, phone, or patient code — now
+     * server-side, since a page only holds 10-20 rows (see limit/offset). */
+    search?: string;
     hasReports?: boolean;
     hasDisease?: boolean;
     followUpStatus?: FollowUpStatus;
     hasReplied?: boolean;
+    /** Page size — defaults to the backend's own default (20) when omitted. */
+    limit?: number;
+    /** Row offset for pagination — 0 for the first page, limit for the second, etc. */
+    offset?: number;
   },
 ): Promise<Patient[]> {
   const params = new URLSearchParams();
+  if (options?.search) params.set("search", options.search);
   if (options?.hasReports !== undefined) params.set("has_reports", String(options.hasReports));
   if (options?.hasDisease !== undefined) params.set("has_disease", String(options.hasDisease));
   if (options?.followUpStatus !== undefined) params.set("follow_up_status", options.followUpStatus);
   if (options?.hasReplied !== undefined) params.set("has_replied", String(options.hasReplied));
+  if (options?.limit !== undefined) params.set("limit", String(options.limit));
+  if (options?.offset !== undefined) params.set("offset", String(options.offset));
   const query = params.toString();
   const raw = await request<RawPatientSummary[]>(`/admin/patients${query ? `?${query}` : ""}`);
   return raw.map(mapPatientSummary);
