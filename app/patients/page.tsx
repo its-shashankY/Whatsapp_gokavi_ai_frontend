@@ -20,9 +20,9 @@ const FOLLOW_UP_FILTER_LABEL: Record<"ALL" | FollowUpStatus, string> = {
 
 const FOLLOW_UP_VALUES = new Set(["NOT_TOUCHED", "ON_HOLD", "COMPLETED"]);
 
-// Page size — small on purpose. Row 1-10 render the instant a page
-// resolves; page 11-20 are fetched in the background right behind it, so
-// "Load more" almost never has to wait on the network at all.
+// Page size — small on purpose. The current page renders the instant it
+// resolves; the next page is fetched in the background right behind it,
+// so clicking "Next" almost never has to wait on the network at all.
 const PAGE_SIZE = 10;
 
 // Row background reflects who last spoke in the conversation — green means
@@ -66,20 +66,20 @@ function PatientRecordsPageInner() {
   const [followUpFilter, setFollowUpFilter] = useState<"ALL" | FollowUpStatus>(initial.followUpFilter);
   const [hasRepliedOnly, setHasRepliedOnly] = useState(initial.hasRepliedOnly);
 
+  const [pageIndex, setPageIndex] = useState(0);
   const [items, setItems] = useState<Patient[]>([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingNext, setLoadingNext] = useState(false);
   // Only true before the very first load ever completes — a filter change
   // afterwards just refetches quietly, keeping the current rows on screen
   // instead of blanking the list while the new page loads.
   const [initialLoading, setInitialLoading] = useState(true);
   const hasLoadedOnce = useRef(false);
 
-  // The next page, fetched in the background right after the current one
-  // renders — "Load more" appends this instantly instead of waiting on a
-  // fresh request, unless the user clicks faster than the prefetch lands.
-  const prefetchedRef = useRef<Patient[] | null>(null);
-  const nextOffsetRef = useRef(0);
+  // Every page visited this filter/search session, keyed by page index —
+  // "Previous" is always instant (you can only get to page N by having
+  // already loaded it), and "Next" is instant whenever the background
+  // prefetch below has already landed.
+  const pageCacheRef = useRef<Map<number, Patient[]>>(new Map());
   const requestIdRef = useRef(0);
 
   // Debounce the search box — wait for a pause in typing before refetching.
@@ -127,65 +127,68 @@ function PatientRecordsPageInner() {
     [debouncedQuery, hasReportsOnly, hasDiseaseOnly, followUpFilter, hasRepliedOnly],
   );
 
-  // Fetches the page right after `offset` and stashes it, ready for an
-  // instant "Load more" — never touches visible state itself.
-  const prefetchNext = useCallback(
-    (offset: number, requestId: number) => {
-      listPatients(buildOptions(offset)).then((page) => {
+  // Fetches a page and stashes it in the cache, ready for an instant
+  // "Next"/"Previous" — never touches visible state itself.
+  const prefetchPage = useCallback(
+    (index: number, requestId: number) => {
+      if (pageCacheRef.current.has(index)) return;
+      listPatients(buildOptions(index * PAGE_SIZE)).then((page) => {
         if (requestIdRef.current !== requestId) return; // filters changed since this was kicked off
-        prefetchedRef.current = page;
+        pageCacheRef.current.set(index, page);
       });
     },
     [buildOptions],
   );
 
-  // Reload from the top whenever a filter (or the debounced search) changes.
+  // Reload from page 0 whenever a filter (or the debounced search) changes.
   useEffect(() => {
     let cancelled = false;
     const requestId = ++requestIdRef.current;
-    prefetchedRef.current = null;
+    pageCacheRef.current = new Map();
+    setPageIndex(0);
 
     listPatients(buildOptions(0))
       .then((page) => {
         if (cancelled) return;
+        pageCacheRef.current.set(0, page);
         setItems(page);
         hasLoadedOnce.current = true;
-        const more = page.length === PAGE_SIZE;
-        setHasMore(more);
-        nextOffsetRef.current = PAGE_SIZE;
-        if (more) prefetchNext(PAGE_SIZE, requestId);
+        if (page.length === PAGE_SIZE) prefetchPage(1, requestId);
       })
       .finally(() => !cancelled && setInitialLoading(false));
 
     return () => {
       cancelled = true;
     };
-  }, [buildOptions, prefetchNext]);
+  }, [buildOptions, prefetchPage]);
 
-  const loadMore = useCallback(async () => {
-    const requestId = requestIdRef.current;
-    const offset = nextOffsetRef.current;
-    let page = prefetchedRef.current;
-    prefetchedRef.current = null;
-
-    if (page === null) {
-      // Clicked before the background prefetch landed — fall back to a
-      // normal (slightly slower, spinner-visible) fetch just this once.
-      setLoadingMore(true);
-      try {
-        page = await listPatients(buildOptions(offset));
-      } finally {
-        setLoadingMore(false);
+  const goToPage = useCallback(
+    async (index: number) => {
+      const requestId = requestIdRef.current;
+      const cached = pageCacheRef.current.get(index);
+      if (cached) {
+        setPageIndex(index);
+        setItems(cached);
+      } else {
+        // Clicked "Next" before the background prefetch landed — fall back
+        // to a normal (slightly slower, spinner-visible) fetch just this once.
+        setLoadingNext(true);
+        let page: Patient[];
+        try {
+          page = await listPatients(buildOptions(index * PAGE_SIZE));
+        } finally {
+          setLoadingNext(false);
+        }
+        if (requestIdRef.current !== requestId) return; // filters changed mid-flight
+        pageCacheRef.current.set(index, page);
+        setPageIndex(index);
+        setItems(page);
       }
-      if (requestIdRef.current !== requestId) return; // filters changed mid-flight
-    }
-
-    setItems((prev) => [...prev, ...page!]);
-    const more = page!.length === PAGE_SIZE;
-    setHasMore(more);
-    nextOffsetRef.current = offset + PAGE_SIZE;
-    if (more) prefetchNext(offset + PAGE_SIZE, requestId);
-  }, [buildOptions, prefetchNext]);
+      // Always keep the page after wherever we just landed pre-fetched.
+      prefetchPage(index + 1, requestId);
+    },
+    [buildOptions, prefetchPage],
+  );
 
   function handleFollowUpChanged(patientId: string, newStatus: FollowUpStatus) {
     setItems((prev) => {
@@ -193,10 +196,12 @@ function PatientRecordsPageInner() {
       // matches it — drop it from view immediately rather than waiting for
       // a refetch, so working through a queue (e.g. "Not touched") shows
       // real progress as each one gets marked.
-      if (followUpFilter !== "ALL" && newStatus !== followUpFilter) {
-        return prev.filter((p) => p.id !== patientId);
-      }
-      return prev.map((p) => (p.id === patientId ? { ...p, followUpStatus: newStatus } : p));
+      const next =
+        followUpFilter !== "ALL" && newStatus !== followUpFilter
+          ? prev.filter((p) => p.id !== patientId)
+          : prev.map((p) => (p.id === patientId ? { ...p, followUpStatus: newStatus } : p));
+      pageCacheRef.current.set(pageIndex, next);
+      return next;
     });
   }
 
@@ -329,19 +334,31 @@ function PatientRecordsPageInner() {
           {!showEmptyLoadingState && items.length === 0 && (
             <p className="p-6 text-center text-on-surface-variant text-sm">No patients match your search.</p>
           )}
-          {!showEmptyLoadingState && hasMore && (
-            <div className="p-4 flex justify-center">
-              <button
-                type="button"
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="px-4 py-2 rounded-full border border-outline-variant text-sm font-medium text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
-              >
-                {loadingMore ? "Loading..." : "Load more"}
-              </button>
-            </div>
-          )}
         </div>
+
+        {!showEmptyLoadingState && (pageIndex > 0 || items.length === PAGE_SIZE) && (
+          <div className="flex items-center justify-center gap-4">
+            <button
+              type="button"
+              onClick={() => goToPage(pageIndex - 1)}
+              disabled={pageIndex === 0 || loadingNext}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg border border-outline-variant text-sm font-medium text-on-surface-variant hover:bg-surface-container disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <Icon name="chevron_left" className="!text-[18px]" />
+              Previous
+            </button>
+            <span className="text-sm text-on-surface-variant">Page {pageIndex + 1}</span>
+            <button
+              type="button"
+              onClick={() => goToPage(pageIndex + 1)}
+              disabled={items.length < PAGE_SIZE || loadingNext}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg border border-outline-variant text-sm font-medium text-on-surface-variant hover:bg-surface-container disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              {loadingNext ? "Loading..." : "Next"}
+              <Icon name="chevron_right" className="!text-[18px]" />
+            </button>
+          </div>
+        )}
       </div>
     </DashboardShell>
   );
