@@ -6,8 +6,8 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { useAuth } from "@/lib/auth";
-import { listConversations, listEscalations, listPatients } from "@/lib/api";
-import type { Conversation, Escalation, Patient } from "@/types";
+import { getPatientCounts, listEscalations, type PatientCounts } from "@/lib/api";
+import type { Escalation } from "@/types";
 
 const QUICK_LINKS = [
   { href: "/inbox", label: "Unified Inbox", icon: "mail", description: "Reply to WhatsApp leads and patients" },
@@ -22,19 +22,14 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const isDoctor = user?.role === "doctor";
 
-  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [escalations, setEscalations] = useState<Escalation[] | null>(null);
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [counts, setCounts] = useState<PatientCounts | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listConversations(), listPatients()])
-      .then(([convos, pats]) => {
-        if (cancelled) return;
-        setConversations(convos);
-        setPatients(pats);
-      })
+    getPatientCounts()
+      .then((data) => !cancelled && setCounts(data))
       .finally(() => !cancelled && setLoading(false));
 
     // Escalations are restricted server-side to doctor/nurse/superadmin.
@@ -47,8 +42,8 @@ export default function DashboardPage() {
     };
   }, [isDoctor]);
 
-  const warmLeads = conversations.filter((c) => c.status === "warm_lead").length;
-  const bookedThisWeek = conversations.filter((c) => c.status === "booked").length;
+  const warmLeads = counts?.byLeadStatus.warm_lead ?? 0;
+  const bookedThisWeek = counts?.byLeadStatus.booked ?? 0;
   const openEscalations = escalations?.filter((e) => e.status === "OPEN").length ?? 0;
 
   return (
@@ -96,7 +91,7 @@ export default function DashboardPage() {
             <p className="font-label-caps text-label-caps text-on-surface-variant uppercase mb-2">
               Registered Patients
             </p>
-            <p className="font-headline-lg text-headline-lg text-primary">{loading ? "–" : patients.length}</p>
+            <p className="font-headline-lg text-headline-lg text-primary">{loading ? "–" : counts?.total ?? 0}</p>
             <p className="text-sm text-on-surface-variant mt-1">{bookedThisWeek} with a booked appointment</p>
           </Card>
         </div>

@@ -229,6 +229,25 @@ export async function listPatients(
   return raw.map(mapPatientSummary);
 }
 
+interface RawPatientCounts {
+  total: number;
+  by_lead_status: Record<LeadStatus, number>;
+}
+
+export interface PatientCounts {
+  total: number;
+  byLeadStatus: Record<LeadStatus, number>;
+}
+
+/** Real, unpaginated totals — use this for dashboard/summary numbers.
+ * listPatients() above caps at 200 rows for table rendering, so its
+ * length silently freezes once there are more than 200 patients; never
+ * derive a total from it. */
+export async function getPatientCounts(): Promise<PatientCounts> {
+  const raw = await request<RawPatientCounts>("/admin/patients/counts");
+  return { total: raw.total, byLeadStatus: raw.by_lead_status };
+}
+
 interface RawConsent {
   id: string;
   label: string;
