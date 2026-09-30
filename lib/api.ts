@@ -330,6 +330,8 @@ interface RawPatientDetail {
   follow_up_status: FollowUpStatus;
   has_replied: boolean;
   last_message_direction: "IN" | "OUT" | null;
+  is_blocked: boolean;
+  blocked_reason: string | null;
   cycle_label?: string | null;
   cycle_progress?: RawCycleStep[];
   medications?: RawMedication[];
@@ -368,6 +370,8 @@ function mapPatientDetail(raw: RawPatientDetail): Patient {
     followUpStatus: raw.follow_up_status,
     hasReplied: raw.has_replied,
     lastMessageDirection: raw.last_message_direction,
+    isBlocked: raw.is_blocked,
+    blockedReason: raw.blocked_reason,
     cycle: raw.cycle_progress?.map((s) => ({ id: s.id, label: s.label, detail: s.detail, state: s.state })),
     medications: raw.medications?.map(
       (m): MedicationEntry => ({
@@ -391,6 +395,14 @@ export async function updateFollowUpStatus(patientId: string, status: FollowUpSt
     body: JSON.stringify({ status }),
   });
   return raw.follow_up_status;
+}
+
+export async function setPatientBlocked(patientId: string, active: boolean, reason?: string): Promise<boolean> {
+  const raw = await request<{ is_blocked: boolean }>(`/admin/patients/${patientId}/block`, {
+    method: "POST",
+    body: JSON.stringify({ active, reason }),
+  });
+  return raw.is_blocked;
 }
 
 // ── Calendar ─────────────────────────────────────────────────────────────

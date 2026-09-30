@@ -77,6 +77,10 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
     [id],
   );
 
+  const handleBlockedChanged = useCallback((isBlocked: boolean, blockedReason: string | null) => {
+    setPatient((prev) => (prev ? { ...prev, isBlocked, blockedReason } : prev));
+  }, []);
+
   const handleSendVoiceNote = useCallback(
     async (blob: Blob) => {
       const message = await sendVoiceNote(id, blob);
@@ -128,7 +132,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
         {backLink}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
           <div className="lg:col-span-8 flex flex-col gap-stack-gap">
-            <PatientHeader patient={patient} />
+            <PatientHeader patient={patient} onBlockedChanged={handleBlockedChanged} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-gap">
               <ConsentStatusCard consents={patient.consents} />
               {patient.cycle && <CycleProgressCard steps={patient.cycle} />}

@@ -2,9 +2,16 @@ import { Avatar } from "@/components/ui/Avatar";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { Icon } from "@/components/ui/Icon";
 import { FollowUpStatusControl } from "@/components/patient/FollowUpStatusControl";
+import { BlockPatientControl } from "@/components/patient/BlockPatientControl";
 import type { Patient } from "@/types";
 
-export function PatientHeader({ patient }: { patient: Patient }) {
+export function PatientHeader({
+  patient,
+  onBlockedChanged,
+}: {
+  patient: Patient;
+  onBlockedChanged?: (isBlocked: boolean, reason: string | null) => void;
+}) {
   const displayName = patient.name ?? "Unknown Contact";
   const subtitleParts = [
     patient.age !== null ? `${patient.age} yrs` : null,
@@ -24,6 +31,12 @@ export function PatientHeader({ patient }: { patient: Patient }) {
           </span>
           <StatusTag status={patient.status} />
           <FollowUpStatusControl patientId={patient.id} status={patient.followUpStatus} />
+          <BlockPatientControl
+            patientId={patient.id}
+            isBlocked={patient.isBlocked ?? false}
+            blockedReason={patient.blockedReason}
+            onChanged={onBlockedChanged}
+          />
         </div>
         {subtitleParts.length > 0 && (
           <p className="font-body-md text-body-md text-on-surface-variant mb-4">

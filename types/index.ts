@@ -110,6 +110,11 @@ export interface Patient {
    * latest thing and awaiting a response, null means no messages yet.
    * Drives the Patients list row coloring (green/red). */
   lastMessageDirection?: "IN" | "OUT" | null;
+  /** Abuse prevention, not clinical — a blocked number's messages are
+   * dropped and never stored (see app.bots.router), and Meta stops
+   * delivering their messages to us at all at the platform level. */
+  isBlocked?: boolean;
+  blockedReason?: string | null;
   /** Present only when the viewing role can see clinical notes (doctor/nurse/superadmin). */
   cycle?: CycleStep[];
   medications?: MedicationEntry[];
