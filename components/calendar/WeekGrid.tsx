@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/Icon";
 import type { DayColumn } from "@/types";
 
-export function WeekGrid({ week }: { week: DayColumn[] }) {
+export function WeekGrid({ week, todayDate }: { week: DayColumn[]; todayDate: number | null }) {
   return (
     <div className="bg-surface-container-lowest rounded-xl shadow-[0_4px_24px_rgba(7,2,53,0.04)] border border-surface-container-highest p-4 md:p-6">
       <div className="flex flex-wrap gap-4 mb-6 pb-4 border-b border-surface-container-highest">
@@ -39,7 +39,7 @@ export function WeekGrid({ week }: { week: DayColumn[] }) {
             );
           }
 
-          const isToday = column.day === "MON";
+          const isToday = todayDate !== null && column.date === todayDate;
 
           return (
             <div key={column.day} className="flex flex-col gap-3 min-w-[140px]">

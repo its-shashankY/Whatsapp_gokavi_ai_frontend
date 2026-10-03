@@ -1,6 +1,13 @@
 import { cn } from "@/lib/utils";
 import type { LeadStatus } from "@/types";
-import { LEAD_STATUS_LABEL } from "@/lib/mockData";
+
+const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {
+  cold_lead: "Cold Lead",
+  warm_lead: "Warm Lead",
+  booked: "Booked",
+  existing_patient: "Existing",
+  dormant: "Dormant",
+};
 
 // Each lead status gets its own fixed color pairing so the tag stays
 // recognizable at a glance across Inbox, Patient Detail and Escalation Queue.

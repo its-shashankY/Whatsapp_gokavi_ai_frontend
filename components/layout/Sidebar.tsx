@@ -1,23 +1,28 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { Icon } from "@/components/ui/Icon";
-import { triageSummary } from "@/lib/mockData";
+import { listEscalations } from "@/lib/api";
 
 interface NavItem {
   href: string;
   label: string;
   icon: string;
   doctorOnly?: boolean;
-  badge?: number;
 }
 
+// Triage/escalation data is restricted server-side to DOCTOR/NURSE/SUPERADMIN
+// (see app.core.rbac in the API repo — front-desk/counselor/billing never get
+// "escalations:read", by deliberate patient-safety design, the same way they
+// never see clinical notes). The "doctor" persona always maps to one of
+// those three roles, so gating on persona here matches the real RBAC exactly.
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  { href: "/triage", label: "Triage", icon: "emergency", badge: triageSummary.critical + triageSummary.urgent },
+  { href: "/triage", label: "Triage", icon: "emergency", doctorOnly: true },
   { href: "/patients", label: "Patient Records", icon: "groups" },
   { href: "/inbox", label: "Inbox", icon: "mail" },
   { href: "/calendar", label: "Calendar", icon: "calendar_month" },
@@ -29,6 +34,20 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
   const role = user?.role ?? "receptionist";
+  const [openEscalations, setOpenEscalations] = useState(0);
+
+  useEffect(() => {
+    if (role !== "doctor") return;
+    let cancelled = false;
+    listEscalations("OPEN")
+      .then((events) => !cancelled && setOpenEscalations(events.length))
+      .catch(() => {
+        // Badge just stays at 0 if the escalations endpoint is unreachable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
 
   return (
     <nav className="hidden md:flex bg-surface h-screen w-sidebar-width flex-col border-r border-outline-variant fixed left-0 top-0 z-40">
@@ -90,9 +109,9 @@ export function Sidebar() {
                 >
                   <Icon name={item.icon} filled={active} />
                   <span className="flex-1">{item.label}</span>
-                  {!!item.badge && (
+                  {item.href === "/triage" && openEscalations > 0 && (
                     <span className="bg-error text-on-error rounded-full px-2 py-0.5 text-[10px] font-bold">
-                      {item.badge}
+                      {openEscalations}
                     </span>
                   )}
                 </Link>
@@ -122,7 +141,7 @@ export function Sidebar() {
               <Icon name="person" className="!text-[18px]" filled />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-primary truncate">{user.name}</p>
+              <p className="text-sm font-semibold text-primary truncate">{user.email}</p>
               <span className="inline-flex items-center gap-1 text-[10px] font-label-caps text-primary bg-primary-fixed px-2 py-0.5 rounded-full">
                 <Icon name="verified_user" className="!text-[12px]" />
                 Authenticated

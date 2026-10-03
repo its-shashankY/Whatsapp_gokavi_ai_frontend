@@ -2,15 +2,28 @@ import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/Icon";
 import type { MedicationEntry } from "@/types";
 
+const STATUS_STYLE: Record<MedicationEntry["status"], string> = {
+  ACTIVE: "bg-secondary-fixed text-on-secondary-fixed",
+  COMPLETED: "bg-surface-variant text-on-surface-variant",
+  SUPERSEDED: "bg-orange-100 text-orange-800",
+  CANCELLED: "bg-gray-200 text-gray-600 line-through",
+};
+
+const STATUS_LABEL: Record<MedicationEntry["status"], string> = {
+  ACTIVE: "Active",
+  COMPLETED: "Completed",
+  SUPERSEDED: "Superseded",
+  CANCELLED: "Cancelled",
+};
+
 export function MedicationsCard({ medications }: { medications: MedicationEntry[] }) {
   return (
     <div className="bg-surface-container-lowest rounded-xl p-6 shadow-[0_4px_24px_rgba(7,2,53,0.04)] border border-surface-variant">
       <div className="flex justify-between items-center mb-4">
         <h3 className="font-button text-button text-primary flex items-center gap-2">
           <Icon name="pill" className="text-secondary" />
-          Active Medications
+          Medications
         </h3>
-        <button className="text-secondary text-sm font-semibold hover:underline">View All</button>
       </div>
       {medications.length === 0 ? (
         <p className="text-sm text-on-surface-variant">No medications on file.</p>
@@ -23,7 +36,7 @@ export function MedicationsCard({ medications }: { medications: MedicationEntry[
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-full bg-primary-fixed-dim flex items-center justify-center text-primary-container flex-shrink-0">
-                  <Icon name={med.icon} />
+                  <Icon name="medication_liquid" />
                 </div>
                 <div className="min-w-0">
                   <p className="font-body-md text-body-md text-on-surface font-semibold truncate">
@@ -32,15 +45,8 @@ export function MedicationsCard({ medications }: { medications: MedicationEntry[
                   <p className="text-xs text-on-surface-variant truncate">{med.dosage}</p>
                 </div>
               </div>
-              <span
-                className={cn(
-                  "px-2 py-1 rounded text-xs font-semibold flex-shrink-0",
-                  med.status === "Active"
-                    ? "bg-secondary-fixed text-on-secondary-fixed"
-                    : "bg-surface-variant text-on-surface-variant",
-                )}
-              >
-                {med.status}
+              <span className={cn("px-2 py-1 rounded text-xs font-semibold flex-shrink-0", STATUS_STYLE[med.status])}>
+                {STATUS_LABEL[med.status]}
               </span>
             </div>
           ))}

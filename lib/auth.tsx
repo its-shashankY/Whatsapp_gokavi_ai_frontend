@@ -7,75 +7,109 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { StaffRole } from "@/types";
+import { ApiError, getToken, login as apiLogin, setToken } from "@/lib/api";
+import type { BackendRole, StaffRole } from "@/types";
 
 interface StaffUser {
-  name: string;
+  email: string;
+  /** Bucketed UI persona — drives the sidebar/shell. */
   role: StaffRole;
+  /** The real backend RBAC role (see app.models.enums.StaffRole in the API repo). */
+  backendRole: BackendRole;
   title: string;
 }
 
 interface AuthContextValue {
   user: StaffUser | null;
   isLoading: boolean;
-  /**
-   * Placeholder auth: accepts any identifier/password and signs the user
-   * in as the selected role. Real authentication (credentials, sessions,
-   * hospital SSO) is not implemented yet.
-   */
-  signIn: (identifier: string, role: StaffRole) => void;
+  error: string | null;
+  signIn: (email: string, password: string) => Promise<boolean>;
   signOut: () => void;
 }
 
-const STORAGE_KEY = "gokavi.auth.session";
+const ROLE_KEY = "gokavi.auth.role";
+const EMAIL_KEY = "gokavi.auth.email";
 
-const ROLE_PROFILES: Record<StaffRole, StaffUser> = {
-  doctor: { name: "Dr. A. Sharma", role: "doctor", title: "Clinical Administrator" },
-  receptionist: { name: "A. Jensen", role: "receptionist", title: "Receptionist" },
+const ROLE_LABEL: Record<BackendRole, string> = {
+  SUPERADMIN: "Super Admin",
+  DOCTOR: "Doctor",
+  NURSE: "Nurse",
+  COUNSELOR: "Counselor",
+  FRONT_DESK: "Front Desk",
+  BILLING: "Billing",
 };
+
+// DOCTOR/NURSE/SUPERADMIN get the "doctor" persona (Pharmacy/Clinical
+// Content unlocked); COUNSELOR/FRONT_DESK/BILLING get "receptionist"
+// (Pharmacy locked). The backend enforces the real per-role permissions
+// regardless — this bucketing only decides which sidebar/shell to render.
+const CLINICAL_ROLES: BackendRole[] = ["DOCTOR", "NURSE", "SUPERADMIN"];
+
+function personaFor(role: BackendRole): StaffRole {
+  return CLINICAL_ROLES.includes(role) ? "doctor" : "receptionist";
+}
+
+function isBackendRole(value: string | null): value is BackendRole {
+  return !!value && value in ROLE_LABEL;
+}
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<StaffUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const role = JSON.parse(stored).role as StaffRole;
-        if (role === "doctor" || role === "receptionist") {
-          setUser(ROLE_PROFILES[role]);
-        }
+      const token = getToken();
+      const storedRole = window.localStorage.getItem(ROLE_KEY);
+      const storedEmail = window.localStorage.getItem(EMAIL_KEY);
+      if (token && isBackendRole(storedRole) && storedEmail) {
+        setUser({ email: storedEmail, role: personaFor(storedRole), backendRole: storedRole, title: ROLE_LABEL[storedRole] });
       }
     } catch {
-      // ignore malformed/unavailable storage
+      // localStorage unavailable — just start signed out.
     }
     setIsLoading(false);
   }, []);
 
-  const signIn = (_identifier: string, role: StaffRole) => {
-    const profile = ROLE_PROFILES[role];
-    setUser(profile);
+  const signIn = async (email: string, password: string): Promise<boolean> => {
+    setError(null);
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ role }));
-    } catch {
-      // ignore
+      const result = await apiLogin(email, password);
+      setToken(result.access_token);
+      try {
+        window.localStorage.setItem(ROLE_KEY, result.role);
+        window.localStorage.setItem(EMAIL_KEY, email);
+      } catch {
+        // ignore — session just won't survive a refresh
+      }
+      setUser({ email, role: personaFor(result.role), backendRole: result.role, title: ROLE_LABEL[result.role] });
+      return true;
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Unable to reach the Gokavi API. Check that the backend is running and NEXT_PUBLIC_API_URL is set.",
+      );
+      return false;
     }
   };
 
   const signOut = () => {
-    setUser(null);
+    setToken(null);
     try {
-      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(ROLE_KEY);
+      window.localStorage.removeItem(EMAIL_KEY);
     } catch {
       // ignore
     }
+    setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, isLoading, error, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

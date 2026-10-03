@@ -1,19 +1,99 @@
 "use client";
 
-import { useState } from "react";
-import { cn } from "@/lib/utils";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { cn, formatMessageTime } from "@/lib/utils";
 import { Icon } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import type { Message } from "@/types";
 
 interface PatientCommsPanelProps {
   patientName: string;
-  avatarUrl?: string;
   messages: Message[];
+  loading: boolean;
+  /** Set when the thread failed to load — distinct from a genuinely empty
+   * conversation, so staff see "failed to load" instead of "no messages". */
+  error?: string | null;
+  onRetry?: () => void;
+  onSend: (text: string) => Promise<void>;
+  onSendVoiceNote: (blob: Blob) => Promise<void>;
 }
 
-export function PatientCommsPanel({ patientName, avatarUrl, messages }: PatientCommsPanelProps) {
+export function PatientCommsPanel({
+  patientName,
+  messages,
+  loading,
+  error,
+  onRetry,
+  onSend,
+  onSendVoiceNote,
+}: PatientCommsPanelProps) {
   const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [sendingVoiceNote, setSendingVoiceNote] = useState(false);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+
+  const handleSend = async () => {
+    const text = draft.trim();
+    if (!text || sending) return;
+    setSending(true);
+    try {
+      await onSend(text);
+      setDraft("");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const stopStream = useCallback((recorder: MediaRecorder) => {
+    recorder.stream.getTracks().forEach((track) => track.stop());
+  }, []);
+
+  const startRecording = async () => {
+    setRecordingError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      recordedChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recordedChunksRef.current.push(event.data);
+      };
+      recorder.onstop = async () => {
+        stopStream(recorder);
+        const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        recordedChunksRef.current = [];
+        if (blob.size === 0) return;
+        setSendingVoiceNote(true);
+        try {
+          await onSendVoiceNote(blob);
+        } catch {
+          setRecordingError("Failed to send voice note. Please try again.");
+        } finally {
+          setSendingVoiceNote(false);
+        }
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setIsRecording(true);
+    } catch {
+      setRecordingError("Microphone access denied or unavailable.");
+    }
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
 
   return (
     <div className="lg:col-span-4 h-full">
@@ -23,34 +103,35 @@ export function PatientCommsPanel({ patientName, avatarUrl, messages }: PatientC
       >
         <div className="bg-surface-container-low p-4 border-b border-surface-variant flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <Avatar name={patientName} src={avatarUrl} size={32} />
+            <Avatar name={patientName} size={32} />
             <div className="min-w-0">
               <p className="font-button text-button text-primary leading-tight truncate">Patient Comms</p>
-              <p className="text-[10px] text-green-600 font-semibold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Online
-              </p>
+              <p className="text-[10px] text-on-surface-variant">WhatsApp</p>
             </div>
           </div>
           <Icon name="more_vert" className="text-on-surface-variant !text-sm" />
         </div>
 
         <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3 bg-surface-container-low/30">
-          <div className="text-center my-2">
-            <span className="bg-surface-variant text-on-surface-variant text-[10px] px-2 py-1 rounded-full uppercase tracking-wider">
-              Today
-            </span>
-          </div>
-          {messages.map((message) => {
-            if (message.sender === "system") {
-              return (
-                <div
-                  key={message.id}
-                  className="self-center bg-primary-fixed-dim/30 text-primary-container text-xs px-3 py-1.5 rounded-lg text-center max-w-[80%] border border-primary-fixed"
+          {loading && <p className="text-center text-sm text-on-surface-variant">Loading conversation...</p>}
+          {!loading && error && (
+            <div className="text-center text-sm">
+              <p className="text-red-600">{error}</p>
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="mt-2 px-3 py-1 rounded-full border border-outline-variant text-on-surface-variant hover:bg-surface-container text-xs font-medium"
                 >
-                  {message.text}
-                </div>
-              );
-            }
+                  Retry
+                </button>
+              )}
+            </div>
+          )}
+          {!loading && !error && messages.length === 0 && (
+            <p className="text-center text-sm text-on-surface-variant">No messages yet.</p>
+          )}
+          {!loading && !error && messages.map((message) => {
             const isStaff = message.sender === "staff";
             return (
               <div
@@ -62,10 +143,14 @@ export function PatientCommsPanel({ patientName, avatarUrl, messages }: PatientC
                     : "self-start bg-white border border-surface-variant text-on-surface rounded-tl-sm",
                 )}
               >
-                <p className="text-sm break-words whitespace-pre-wrap">{message.text}</p>
-                <div className={cn("flex items-center gap-1 mt-1", isStaff ? "justify-end" : "justify-end")}>
+                {message.type === "audio" && message.mediaUrl ? (
+                  <audio controls src={message.mediaUrl} className="max-w-full h-10" />
+                ) : (
+                  <p className="text-sm break-words whitespace-pre-wrap">{message.text}</p>
+                )}
+                <div className="flex items-center gap-1 mt-1 justify-end">
                   <span className={cn("text-[10px]", isStaff ? "text-primary-container/70" : "text-on-surface-variant")}>
-                    {message.timestamp}
+                    {formatMessageTime(message.timestamp)}
                   </span>
                   {isStaff && message.read && (
                     <Icon name="done_all" className="!text-[14px] text-primary" />
@@ -76,20 +161,42 @@ export function PatientCommsPanel({ patientName, avatarUrl, messages }: PatientC
           })}
         </div>
 
+        {recordingError && (
+          <p className="px-3 pt-2 text-xs text-red-600 bg-surface">{recordingError}</p>
+        )}
         <div className="p-3 bg-surface border-t border-surface-variant flex items-center gap-2">
-          <button className="p-2 text-on-surface-variant hover:text-secondary rounded-full">
-            <Icon name="attach_file" />
+          <button
+            type="button"
+            title={isRecording ? "Stop recording and send" : "Record a voice note"}
+            className={cn(
+              "p-2 rounded-full flex items-center justify-center disabled:opacity-50",
+              isRecording
+                ? "bg-red-100 text-red-600 animate-pulse"
+                : "text-on-surface-variant hover:text-secondary",
+            )}
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={sendingVoiceNote}
+          >
+            <Icon name={isRecording ? "stop" : "mic"} className="!text-sm" />
           </button>
           <input
             className="flex-1 bg-surface-container-lowest border border-outline-variant rounded-full py-2 px-4 text-sm focus:ring-1 focus:ring-secondary focus:border-secondary outline-none"
-            placeholder="Type a message..."
+            placeholder={sendingVoiceNote ? "Sending voice note..." : "Type a message..."}
             type="text"
             value={draft}
+            disabled={isRecording || sendingVoiceNote}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
           />
           <button
-            className="p-2 bg-secondary text-white rounded-full hover:opacity-90 shadow-sm flex items-center justify-center"
-            onClick={() => setDraft("")}
+            className="p-2 bg-secondary text-white rounded-full hover:opacity-90 shadow-sm flex items-center justify-center disabled:opacity-50"
+            onClick={handleSend}
+            disabled={sending || !draft.trim() || isRecording}
           >
             <Icon name="send" className="!text-sm" filled />
           </button>
