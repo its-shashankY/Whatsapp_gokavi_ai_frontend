@@ -8,7 +8,9 @@ import { Avatar } from "@/components/ui/Avatar";
 import { StatusTag } from "@/components/ui/StatusTag";
 import { Icon } from "@/components/ui/Icon";
 import { FollowUpStatusControl } from "@/components/patient/FollowUpStatusControl";
+import { BlockPatientControl } from "@/components/patient/BlockPatientControl";
 import { listPatients } from "@/lib/api";
+import { isRecentlyVisited } from "@/lib/visitTracker";
 import type { FollowUpStatus, Patient } from "@/types";
 
 const FOLLOW_UP_FILTER_LABEL: Record<"ALL" | FollowUpStatus, string> = {
@@ -205,6 +207,14 @@ function PatientRecordsPageInner() {
     });
   }
 
+  function handleBlockedChanged(patientId: string, isBlocked: boolean, blockedReason: string | null) {
+    setItems((prev) => {
+      const next = prev.map((p) => (p.id === patientId ? { ...p, isBlocked, blockedReason } : p));
+      pageCacheRef.current.set(pageIndex, next);
+      return next;
+    });
+  }
+
   const showEmptyLoadingState = initialLoading && !hasLoadedOnce.current;
 
   return (
@@ -282,12 +292,21 @@ function PatientRecordsPageInner() {
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant card-shadow divide-y divide-surface-variant overflow-hidden">
           {showEmptyLoadingState && <p className="p-6 text-center text-on-surface-variant text-sm">Loading patients...</p>}
           {!showEmptyLoadingState &&
-            items.map((patient) => (
+            items.map((patient) => {
+              // The backend only flips to OUT once staff actually replies —
+              // if staff already opened this chat, show it as handled right
+              // away rather than waiting on that round trip (see
+              // lib/visitTracker.ts).
+              const effectiveDirection: "IN" | "OUT" | null | undefined =
+                patient.lastMessageDirection === "IN" && isRecentlyVisited(patient.id)
+                  ? "OUT"
+                  : patient.lastMessageDirection;
+              return (
               <Link
                 key={patient.id}
                 href={`/patients/${patient.id}`}
                 className={`flex items-center gap-4 p-4 transition-colors ${
-                  patient.lastMessageDirection ? ROW_TINT[patient.lastMessageDirection] : "hover:bg-surface-container-low"
+                  effectiveDirection ? ROW_TINT[effectiveDirection] : "hover:bg-surface-container-low"
                 }`}
               >
                 <Avatar name={patient.name ?? "?"} size={44} />
@@ -327,10 +346,26 @@ function PatientRecordsPageInner() {
                   status={patient.followUpStatus}
                   onChanged={(next) => handleFollowUpChanged(patient.id, next)}
                 />
+                {/* Rows are a Link — swallow clicks here so Block/Unblock
+                    (and its reason prompt) never trigger row navigation. */}
+                <div
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                >
+                  <BlockPatientControl
+                    patientId={patient.id}
+                    isBlocked={patient.isBlocked ?? false}
+                    blockedReason={patient.blockedReason}
+                    onChanged={(isBlocked, reason) => handleBlockedChanged(patient.id, isBlocked, reason)}
+                  />
+                </div>
                 <StatusTag status={patient.status} />
                 <Icon name="chevron_right" className="text-on-surface-variant flex-shrink-0" />
               </Link>
-            ))}
+              );
+            })}
           {!showEmptyLoadingState && items.length === 0 && (
             <p className="p-6 text-center text-on-surface-variant text-sm">No patients match your search.</p>
           )}

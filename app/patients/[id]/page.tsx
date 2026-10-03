@@ -12,6 +12,7 @@ import { ReportsCard } from "@/components/patient/ReportsCard";
 import { DiseaseCard } from "@/components/patient/DiseaseCard";
 import { PatientCommsPanel } from "@/components/patient/PatientCommsPanel";
 import { ApiError, getConversationThread, getPatientDetail, sendMessage, sendVoiceNote } from "@/lib/api";
+import { markPatientVisited } from "@/lib/visitTracker";
 import type { Message, Patient } from "@/types";
 
 export default function PatientDetailPage({ params }: { params: { id: string } }) {
@@ -52,6 +53,12 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
   }, [id]);
 
   useEffect(() => {
+    // Opening a patient's chat is treated as "staff has seen this" — the
+    // Patients list switches that row to green instantly off this, ahead of
+    // the backend's own last_message_direction catching up (see
+    // lib/visitTracker.ts for why this is a local-only approximation).
+    markPatientVisited(id);
+
     let cancelled = false;
     getPatientDetail(id)
       .then((data) => !cancelled && setPatient(data))

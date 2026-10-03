@@ -212,6 +212,8 @@ interface RawPatientSummary {
   follow_up_status: FollowUpStatus;
   has_replied: boolean;
   last_message_direction: "IN" | "OUT" | null;
+  is_blocked: boolean;
+  blocked_reason: string | null;
 }
 
 function mapPatientSummary(raw: RawPatientSummary): Patient {
@@ -233,6 +235,8 @@ function mapPatientSummary(raw: RawPatientSummary): Patient {
     followUpStatus: raw.follow_up_status,
     hasReplied: raw.has_replied,
     lastMessageDirection: raw.last_message_direction,
+    isBlocked: raw.is_blocked,
+    blockedReason: raw.blocked_reason,
   };
 }
 
