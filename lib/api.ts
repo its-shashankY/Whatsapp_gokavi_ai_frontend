@@ -5,6 +5,8 @@ import type {
   AuditLogEntry,
   BackendRole,
   CalendarWeek,
+  CallAvailabilitySummary,
+  CallBooking,
   Conversation,
   Escalation,
   EscalationSeverity,
@@ -602,4 +604,64 @@ export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview
     funnel: raw.funnel,
     channels: raw.channels,
   };
+}
+
+// ── Doctor call booking ─────────────────────────────────────────────────
+
+interface RawCallAvailabilitySummary {
+  availability_id: string;
+  slots_created: number;
+  eligible_patients: number;
+  invites_sent: number;
+  invites_failed: number;
+}
+
+export async function setCallAvailability(payload: {
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  doctorId?: string;
+}): Promise<CallAvailabilitySummary> {
+  const raw = await request<RawCallAvailabilitySummary>("/admin/calls/availability", {
+    method: "POST",
+    body: JSON.stringify({
+      date: payload.date, start_time: payload.startTime, end_time: payload.endTime,
+      ...(payload.doctorId ? { doctor_id: payload.doctorId } : {}),
+    }),
+  });
+  return {
+    availabilityId: raw.availability_id, slotsCreated: raw.slots_created, eligiblePatients: raw.eligible_patients,
+    invitesSent: raw.invites_sent, invitesFailed: raw.invites_failed,
+  };
+}
+
+interface RawCallBooking {
+  id: string;
+  patient_id: string;
+  phone: string;
+  name: string | null;
+  date: string;
+  start_time: string;
+  end_time: string;
+  is_time_elapsed: boolean;
+  is_reminder_sent: boolean;
+  booked_at: string | null;
+}
+
+function mapCallBooking(raw: RawCallBooking): CallBooking {
+  return {
+    id: raw.id, patientId: raw.patient_id, phone: raw.phone, name: raw.name,
+    date: raw.date, startTime: raw.start_time, endTime: raw.end_time,
+    isTimeElapsed: raw.is_time_elapsed, isReminderSent: raw.is_reminder_sent, bookedAt: raw.booked_at,
+  };
+}
+
+export async function getCurrentCallBookings(): Promise<CallBooking[]> {
+  const raw = await request<RawCallBooking[]>("/admin/calls/bookings");
+  return raw.map(mapCallBooking);
+}
+
+export async function getCallBookingHistory(): Promise<CallBooking[]> {
+  const raw = await request<RawCallBooking[]>("/admin/calls/history");
+  return raw.map(mapCallBooking);
 }

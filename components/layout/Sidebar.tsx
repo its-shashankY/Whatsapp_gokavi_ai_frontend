@@ -26,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/patients", label: "Patient Records", icon: "groups" },
   { href: "/inbox", label: "Inbox", icon: "mail" },
   { href: "/calendar", label: "Calendar", icon: "calendar_month" },
+  { href: "/booking", label: "Booking", icon: "call" },
   { href: "/pharmacy", label: "Pharmacy", icon: "medication", doctorOnly: true },
   { href: "/analytics", label: "Analytics", icon: "analytics" },
 ];

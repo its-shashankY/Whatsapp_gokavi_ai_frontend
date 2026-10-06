@@ -147,6 +147,31 @@ export interface CalendarWeek {
   days: DayColumn[];
 }
 
+/** A doctor report-review call slot a patient has booked over WhatsApp —
+ * see the "Booking" page. Distinct from AppointmentSlot/CalendarWeek above
+ * (the general clinic appointment calendar) — this is a narrower,
+ * invite-only queue for reviewing a submitted report by phone. */
+export interface CallBooking {
+  id: string;
+  patientId: string;
+  phone: string;
+  name: string | null;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:MM:SS
+  endTime: string;
+  isTimeElapsed: boolean;
+  isReminderSent: boolean;
+  bookedAt: string | null;
+}
+
+export interface CallAvailabilitySummary {
+  availabilityId: string;
+  slotsCreated: number;
+  eligiblePatients: number;
+  invitesSent: number;
+  invitesFailed: number;
+}
+
 export type EscalationTrigger =
   | "RED_FLAG_SYMPTOM"
   | "MISSED_CRITICAL_DOSE"
