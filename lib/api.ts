@@ -646,6 +646,7 @@ interface RawCallBooking {
   is_time_elapsed: boolean;
   is_reminder_sent: boolean;
   booked_at: string | null;
+  report_url: string | null;
 }
 
 function mapCallBooking(raw: RawCallBooking): CallBooking {
@@ -653,6 +654,7 @@ function mapCallBooking(raw: RawCallBooking): CallBooking {
     id: raw.id, patientId: raw.patient_id, phone: raw.phone, name: raw.name,
     date: raw.date, startTime: raw.start_time, endTime: raw.end_time,
     isTimeElapsed: raw.is_time_elapsed, isReminderSent: raw.is_reminder_sent, bookedAt: raw.booked_at,
+    reportUrl: raw.report_url,
   };
 }
 

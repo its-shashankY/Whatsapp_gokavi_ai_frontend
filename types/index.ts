@@ -162,6 +162,9 @@ export interface CallBooking {
   isTimeElapsed: boolean;
   isReminderSent: boolean;
   bookedAt: string | null;
+  /** Signed download link for the patient's most recent report — null if
+   * they have none on file, or archiving wasn't configured for it. */
+  reportUrl: string | null;
 }
 
 export interface CallAvailabilitySummary {

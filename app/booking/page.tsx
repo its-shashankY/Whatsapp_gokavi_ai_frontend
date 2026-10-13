@@ -8,9 +8,9 @@ import { Icon } from "@/components/ui/Icon";
 import { ApiError, getCallBookingHistory, getCurrentCallBookings, setCallAvailability } from "@/lib/api";
 import type { CallAvailabilitySummary, CallBooking } from "@/types";
 
-// Fixed per the client spec — every slot is exactly 15 minutes; staff only
+// Fixed per the client spec — every slot is exactly 10 minutes; staff only
 // choose the date and the start/end of the window, not the slot length.
-const SLOT_DURATION_MIN = 15;
+const SLOT_DURATION_MIN = 10;
 
 function formatTime(hhmmss: string): string {
   const [h, m] = hhmmss.split(":").map(Number);
@@ -41,6 +41,7 @@ function BookingTable({ rows, loading, emptyLabel }: { rows: CallBooking[]; load
             <th className="px-4 py-3 font-medium">Name</th>
             <th className="px-4 py-3 font-medium">Date</th>
             <th className="px-4 py-3 font-medium">Slot</th>
+            <th className="px-4 py-3 font-medium">Report</th>
             <th className="px-4 py-3 font-medium">Time Elapsed</th>
             <th className="px-4 py-3 font-medium">Reminder Sent</th>
           </tr>
@@ -53,6 +54,21 @@ function BookingTable({ rows, loading, emptyLabel }: { rows: CallBooking[]; load
               <td className="px-4 py-3">{row.name ?? "Unknown Contact"}</td>
               <td className="px-4 py-3">{formatDate(row.date)}</td>
               <td className="px-4 py-3">{formatTime(row.startTime)} – {formatTime(row.endTime)}</td>
+              <td className="px-4 py-3">
+                {row.reportUrl ? (
+                  <a
+                    href={row.reportUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-secondary text-sm font-medium hover:underline w-fit"
+                  >
+                    <Icon name="description" className="!text-[16px]" />
+                    View
+                  </a>
+                ) : (
+                  <span className="text-xs text-on-surface-variant italic">No report</span>
+                )}
+              </td>
               <td className="px-4 py-3">
                 <span
                   className={`px-2 py-1 rounded-md text-xs font-medium ${
