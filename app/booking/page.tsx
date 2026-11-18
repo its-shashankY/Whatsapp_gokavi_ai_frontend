@@ -124,6 +124,7 @@ export default function BookingPage() {
   const [loadingHistory, setLoadingHistory] = useState(true);
 
   const [date, setDate] = useState(todayLocalISO);
+  const [endDate, setEndDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -165,9 +166,13 @@ export default function BookingPage() {
       setFormError("Start time must be before end time.");
       return;
     }
+    if (endDate && endDate < date) {
+      setFormError("End date must be on or after the start date.");
+      return;
+    }
     setSubmitting(true);
     try {
-      const result = await setCallAvailability({ date, startTime, endTime });
+      const result = await setCallAvailability({ date, endDate: endDate || undefined, startTime, endTime });
       setSummary(result);
       loadCurrent();
     } catch (err) {
@@ -192,17 +197,32 @@ export default function BookingPage() {
         <Card className="p-6">
           <h3 className="font-headline-sm text-headline-sm text-primary mb-1">Doctor Availability</h3>
           <p className="text-sm text-on-surface-variant mb-4">
-            Choose a date and time window — it's automatically split into {SLOT_DURATION_MIN}-minute slots, and
-            every eligible patient (sent a report, never booked before) gets a WhatsApp invite right away.
+            Choose a date (or a date range) and time window — the same window is automatically split into{" "}
+            {SLOT_DURATION_MIN}-minute slots on every day in the range, and every eligible patient (sent a report,
+            never booked before) gets a single WhatsApp invite right away covering the whole range.
           </p>
           <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-4">
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-on-surface-variant" htmlFor="booking-date">Date</label>
+              <label className="text-xs font-medium text-on-surface-variant" htmlFor="booking-date">Start date</label>
               <input
                 id="booking-date"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                className="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-low text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-on-surface-variant" htmlFor="booking-end-date">
+                End date <span className="font-normal text-on-surface-variant/70">(optional)</span>
+              </label>
+              <input
+                id="booking-end-date"
+                type="date"
+                value={endDate}
+                min={date || undefined}
+                onChange={(e) => setEndDate(e.target.value)}
+                placeholder="Same as start date"
                 className="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-low text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
               />
             </div>

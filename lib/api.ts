@@ -618,6 +618,7 @@ interface RawCallAvailabilitySummary {
 
 export async function setCallAvailability(payload: {
   date: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD, inclusive — same window opens every day through this date
   startTime: string; // HH:MM
   endTime: string; // HH:MM
   doctorId?: string;
@@ -626,6 +627,7 @@ export async function setCallAvailability(payload: {
     method: "POST",
     body: JSON.stringify({
       date: payload.date, start_time: payload.startTime, end_time: payload.endTime,
+      ...(payload.endDate && payload.endDate !== payload.date ? { end_date: payload.endDate } : {}),
       ...(payload.doctorId ? { doctor_id: payload.doctorId } : {}),
     }),
   });
