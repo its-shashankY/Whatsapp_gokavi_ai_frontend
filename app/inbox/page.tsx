@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { ConversationList } from "@/components/inbox/ConversationList";
 import { ChatPanel } from "@/components/inbox/ChatPanel";
@@ -11,7 +12,22 @@ import { useAuth } from "@/lib/auth";
 import type { Conversation, Escalation, Message } from "@/types";
 
 export default function InboxPage() {
+  // useSearchParams() requires a Suspense boundary during static export —
+  // the actual page body lives in InboxPageInner below.
+  return (
+    <Suspense fallback={null}>
+      <InboxPageInner />
+    </Suspense>
+  );
+}
+
+function InboxPageInner() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  // Lets other pages (e.g. Booking) deep-link straight to a patient's
+  // thread via /inbox?patientId=<id> instead of landing on whichever
+  // conversation happens to be first in the list.
+  const linkedPatientId = searchParams.get("patientId");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -26,7 +42,11 @@ export default function InboxPage() {
       .then((data) => {
         if (cancelled) return;
         setConversations(data);
-        setActiveId((current) => current ?? data[0]?.patientId ?? null);
+        setActiveId((current) => {
+          if (current) return current;
+          if (linkedPatientId && data.some((c) => c.patientId === linkedPatientId)) return linkedPatientId;
+          return data[0]?.patientId ?? null;
+        });
       })
       .finally(() => !cancelled && setLoadingList(false));
 
@@ -46,7 +66,7 @@ export default function InboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [user?.role]);
+  }, [user?.role, linkedPatientId]);
 
   useEffect(() => {
     if (!activeId) return;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -24,7 +25,20 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function BookingTable({ rows, loading, emptyLabel }: { rows: CallBooking[]; loading: boolean; emptyLabel: string }) {
+function todayLocalISO(): string {
+  // Local calendar date, not UTC — new Date().toISOString() would roll
+  // over a day early/late depending on the viewer's timezone offset.
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function BookingTable({
+  rows, loading, emptyLabel, onOpenConversation,
+}: {
+  rows: CallBooking[]; loading: boolean; emptyLabel: string; onOpenConversation: (patientId: string) => void;
+}) {
   if (loading) {
     return <p className="p-6 text-center text-on-surface-variant text-sm">Loading…</p>;
   }
@@ -48,7 +62,12 @@ function BookingTable({ rows, loading, emptyLabel }: { rows: CallBooking[]; load
         </thead>
         <tbody className="divide-y divide-surface-variant">
           {rows.map((row, i) => (
-            <tr key={row.id}>
+            <tr
+              key={row.id}
+              onClick={() => onOpenConversation(row.patientId)}
+              className="cursor-pointer hover:bg-surface-container-low"
+              title="Open this patient's conversation in the Inbox"
+            >
               <td className="px-4 py-3 text-on-surface-variant">{i + 1}</td>
               <td className="px-4 py-3">{row.phone}</td>
               <td className="px-4 py-3">{row.name ?? "Unknown Contact"}</td>
@@ -60,6 +79,7 @@ function BookingTable({ rows, loading, emptyLabel }: { rows: CallBooking[]; load
                     href={row.reportUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     className="flex items-center gap-1 text-secondary text-sm font-medium hover:underline w-fit"
                   >
                     <Icon name="description" className="!text-[16px]" />
@@ -96,18 +116,23 @@ function BookingTable({ rows, loading, emptyLabel }: { rows: CallBooking[]; load
 }
 
 export default function BookingPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<"current" | "history">("current");
   const [current, setCurrent] = useState<CallBooking[]>([]);
   const [history, setHistory] = useState<CallBooking[]>([]);
   const [loadingCurrent, setLoadingCurrent] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(true);
 
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(todayLocalISO);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [summary, setSummary] = useState<CallAvailabilitySummary | null>(null);
+
+  const openConversation = useCallback((patientId: string) => {
+    router.push(`/inbox?patientId=${patientId}`);
+  }, [router]);
 
   const loadCurrent = useCallback(() => {
     setLoadingCurrent(true);
@@ -239,9 +264,9 @@ export default function BookingPage() {
 
         <Card className="overflow-hidden">
           {tab === "current" ? (
-            <BookingTable rows={current} loading={loadingCurrent} emptyLabel="No upcoming bookings." />
+            <BookingTable rows={current} loading={loadingCurrent} emptyLabel="No upcoming bookings." onOpenConversation={openConversation} />
           ) : (
-            <BookingTable rows={history} loading={loadingHistory} emptyLabel="No completed bookings yet." />
+            <BookingTable rows={history} loading={loadingHistory} emptyLabel="No completed bookings yet." onOpenConversation={openConversation} />
           )}
         </Card>
       </div>
